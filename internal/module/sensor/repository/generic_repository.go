@@ -22,6 +22,11 @@ type GenericRepository struct {
 	DB *sqlx.DB
 }
 
+func (r GenericRepository) FindAllBy(T any, R any) ([]*any, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (r GenericRepository) FindBy(T any, R any) (d *any, err error) {
 	//TODO implement me
 	panic("implement me")
@@ -148,8 +153,8 @@ func (r GenericRepository) DeleteByID(T any, id int) error {
 	return nil
 }
 
-func NewGenericRepository(conn *sqlx.DB) IRepository {
-	return Repository{
+func NewGenericRepository(conn *sqlx.DB) IGenericRepository {
+	return GenericRepository{
 		DB: conn,
 	}
 }

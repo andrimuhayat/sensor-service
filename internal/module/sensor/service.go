@@ -20,6 +20,7 @@ func RunConsumer(wg *sync.WaitGroup, f func()) {
 func StartService(dependency module.Dependency, router *echo.Echo) {
 	//init repo
 	dependency.SensorRepository = repository.NewRepository(dependency.DB)
+	dependency.GenericRepository = repository.NewGenericRepository(dependency.DB)
 	//init usecase
 	dependency.SensorUseCase = usecase.NewUseCase(dependency.SensorRepository, dependency.MqttClient, dependency.GenericRepository)
 	// define handler

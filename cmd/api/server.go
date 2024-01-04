@@ -92,6 +92,7 @@ func (s *Server) initModuleDependency(appConfig *app.Config) module.Dependency {
 		dependency module.Dependency
 	)
 	dependency.MqttClient = mqqt.Connect("sub", appConfig.Mqtt)
+	dependency.DB = s.DB
 	sensor.StartService(dependency, s.AppRouter)
 	return dependency
 }

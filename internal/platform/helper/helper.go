@@ -22,10 +22,10 @@ import (
 )
 
 var (
-	oneToMany = "ONETOMANY"
-	oneToOne  = "ONETOONE"
-	manyToOne = "MANYTOONE"
-	//protectedTimestamp = []string{"created_at", "updated_at", "started_at", "ended_at", "started_at", "ended_at", "new_user_started_at", "new_user_ended_at"}
+	oneToMany       = "ONETOMANY"
+	oneToOne        = "ONETOONE"
+	manyToOne       = "MANYTOONE"
+	protectedFields = []string{"created_at", "updated_at", "started_at", "ended_at", "started_at", "ended_at", "new_user_started_at", "new_user_ended_at", "timestamp", "id"}
 )
 
 var DDMMYYYYhhmmss = "2006-01-02 15:04:05"
@@ -322,11 +322,11 @@ func GetValues(T any) []interface{} {
 	v := reflect.ValueOf(T)
 	var fields []interface{}
 	for i := 0; i < v.NumField(); i++ {
-		//exclude := []string{"updated_at", "id"}
-		//valid := slices.Contains(exclude, v.Type().Field(i).Tag.Get("json")) // true
-		if v.Field(i).Interface() != nil {
-			//values[i] = v.Field(i).Interface()
-			fields = append(fields, v.Field(i).Interface())
+		excludeTs := slices.Contains(protectedFields, v.Type().Field(i).Tag.Get("db"))
+		if !excludeTs {
+			if v.Field(i).Interface() != nil {
+				fields = append(fields, v.Field(i).Interface())
+			}
 		}
 	}
 	return fields
@@ -338,7 +338,8 @@ func PrintFields(v interface{}) []string {
 	for i := 0; i < val.Type().NumField(); i++ {
 		exclude := []string{oneToMany, oneToOne, manyToOne}
 		valid := slices.Contains(exclude, val.Type().Field(i).Tag.Get("relation"))
-		if !valid {
+		excludeTs := slices.Contains(protectedFields, val.Type().Field(i).Tag.Get("db"))
+		if !valid && !excludeTs {
 			name := val.Type().Field(i).Tag.Get("db")
 			if name != "total_data" {
 				fields = append(fields, name)
