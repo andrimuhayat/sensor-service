@@ -45,7 +45,6 @@ func (u UseCase) GetAllSensor(request config.HTTPRequest) (*httpresponse.Paginat
 	}
 	if err = decoder.Decode(request.Queries); err != nil {
 		log.Println("{SensorDataGenerateRequest}{Decode}{Error} : ", err)
-		//helper.ResponseWithError(w, http.StatusInternalServerError, httpresponse.ErrorInternalServerError.Message)
 	}
 
 	limit, _ := strconv.Atoi(queryParamReq.Limit)
@@ -146,7 +145,6 @@ func (u UseCase) DeleteSensor(request config.HTTPRequest) *httpresponse.HTTPErro
 	}
 	if err = decoder.Decode(request.Queries); err != nil {
 		log.Println("{SensorDataGenerateRequest}{Decode}{Error} : ", err)
-		//helper.ResponseWithError(w, http.StatusInternalServerError, httpresponse.ErrorInternalServerError.Message)
 	}
 
 	allSensor, err := u.SensorRepository.GetAllSensor(queryParamReq)
