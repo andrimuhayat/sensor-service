@@ -1,0 +1,21 @@
+app:
+  port: 8080
+  name: sensor_service
+mysql:
+  host: 0.0.0.0
+  port: 3306
+  driver_name: mysql
+  username: cabin
+  password: cabinpw
+  charset: utf8
+  db_name: cabin
+  max_open_connection: 5
+  max_idle_connection: 2
+  max_lifetime_connection: 60s
+  db_migrate: false
+kafka:
+  host: 0.0.0.0
+  port: 9092
+mqtt:
+  host: 0.0.0.0
+  port: 1883
