@@ -26,7 +26,7 @@ func StartService(dependency module.Dependency, router *echo.Echo) {
 	// define handler
 	sensorHandler := handler.NewHandler(dependency.SensorUseCase)
 	//init route
-	versionRoute := router.Group("/test")
+	versionRoute := router.Group("/api")
 	//run consumer mqtt
 	RunConsumer(&sync.WaitGroup{}, dependency.SensorUseCase.ListenStreamingData)
 

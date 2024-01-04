@@ -6,6 +6,7 @@ import (
 
 type Sensor struct {
 	ID          int                    `json:"id" db:"id"`
+	TotalData   *int                   `json:"total_data" db:"total_data"`
 	SensorValue float32                `json:"sensor_value" db:"sensor_value"`
 	SensorType  string                 `json:"sensor_type" db:"sensor_type"`
 	ID1         string                 `json:"ID1" db:"ID1"`

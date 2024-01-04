@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/iancoleman/strcase"
+	"github.com/mitchellh/mapstructure"
 	"golang.org/x/exp/slices"
 	"log"
 	"os"
@@ -39,8 +40,8 @@ func StringBoolToBool(value string) bool {
 }
 
 func LimitOffset(limit string, offset string) (int, int) {
-	if limit == "0" {
-		limit = "16"
+	if limit == "" {
+		limit = "10"
 	}
 	lmt, _ := strconv.Atoi(limit)
 	page, _ := strconv.Atoi(offset)
@@ -322,13 +323,52 @@ func GetValues(T any) []interface{} {
 	v := reflect.ValueOf(T)
 	var fields []interface{}
 	for i := 0; i < v.NumField(); i++ {
-		excludeTs := slices.Contains(protectedFields, v.Type().Field(i).Tag.Get("db"))
-		if !excludeTs {
-			if v.Field(i).Interface() != nil {
-				fields = append(fields, v.Field(i).Interface())
-			}
+		//excludeTs := slices.Contains(protectedFields, v.Type().Field(i).Tag.Get("db"))
+		//if !excludeTs {
+		if v.Field(i).Interface() != nil {
+			fields = append(fields, v.Field(i).Interface())
 		}
 	}
+	return fields
+}
+
+func GetInsertValues(T any) []interface{} {
+	v := reflect.ValueOf(T)
+	var fields []interface{}
+	for i := 0; i < v.NumField(); i++ {
+		excludeTs := slices.Contains(protectedFields, v.Type().Field(i).Tag.Get("db"))
+		if !IsNilish(v.Field(i).Interface()) {
+			if !excludeTs {
+				if v.Field(i).Interface() != nil {
+					fields = append(fields, v.Field(i).Interface())
+				}
+			}
+		}
+
+	}
+	return fields
+}
+
+func PrintInsertFields(v interface{}) []string {
+	var fields []string
+	val := reflect.ValueOf(v)
+	for i := 0; i < val.Type().NumField(); i++ {
+		exclude := []string{oneToMany, oneToOne, manyToOne}
+		valid := slices.Contains(exclude, val.Type().Field(i).Tag.Get("relation"))
+		excludeTs := slices.Contains(protectedFields, val.Type().Field(i).Tag.Get("db"))
+		if !excludeTs {
+			if !valid {
+				name := val.Type().Field(i).Tag.Get("db")
+				if name != "total_data" {
+					fields = append(fields, name)
+				}
+			}
+		}
+
+		//if val.Field(i).Interface() != nil {
+		//}
+	}
+
 	return fields
 }
 
@@ -338,8 +378,8 @@ func PrintFields(v interface{}) []string {
 	for i := 0; i < val.Type().NumField(); i++ {
 		exclude := []string{oneToMany, oneToOne, manyToOne}
 		valid := slices.Contains(exclude, val.Type().Field(i).Tag.Get("relation"))
-		excludeTs := slices.Contains(protectedFields, val.Type().Field(i).Tag.Get("db"))
-		if !valid && !excludeTs {
+		//excludeTs := slices.Contains(protectedFields, val.Type().Field(i).Tag.Get("db"))
+		if !valid {
 			name := val.Type().Field(i).Tag.Get("db")
 			if name != "total_data" {
 				fields = append(fields, name)
@@ -385,7 +425,9 @@ func StructMap(in interface{}) map[string]interface{} {
 		relation := slices.Contains(exclude, v.Type().Field(i).Tag.Get("relation"))
 		if !relation {
 			name := v.Type().Field(i).Tag.Get("db")
-			result[name] = v.Field(i).Interface()
+			if name != "total_data" {
+				result[name] = v.Field(i).Interface()
+			}
 		}
 	}
 
@@ -473,4 +515,40 @@ func SetExistingFields(src interface{}, dst interface{}) {
 		}
 
 	}
+}
+
+func DecoderConfig(req interface{}) *mapstructure.DecoderConfig {
+	config := &mapstructure.DecoderConfig{
+		ErrorUnused: true,
+		Result:      &req,
+		TagName:     "json",
+	}
+	return config
+}
+
+func IsNilish(val any) bool {
+	if val == nil {
+		return true
+	}
+
+	v := reflect.ValueOf(val)
+	k := v.Kind()
+	switch k {
+	case reflect.Chan, reflect.Func, reflect.Map, reflect.Pointer,
+		reflect.UnsafePointer, reflect.Interface, reflect.Slice:
+		return v.IsNil()
+	}
+
+	return false
+}
+
+func Convert12HourTo24Hour(hour string) string {
+	layout := "03:04PM"
+	layout24h := "15:04"
+	t, err := time.Parse(layout, hour)
+	if err != nil {
+		fmt.Println(err)
+		return ""
+	}
+	return t.Format(layout24h)
 }
