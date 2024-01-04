@@ -38,10 +38,8 @@ func (r Repository) FindAllBy(T any, R any) ([]*any, error) {
 }
 
 func (r GenericRepository) Create(T any) error {
-	values := helper.GetValues(T)
-	columns := helper.PrintFields(T)
-
-	log.Println("ada?", columns, values)
+	values := helper.GetInsertValues(T)
+	columns := helper.PrintInsertFields(T)
 
 	queryBuilder := sq.Insert(helper.GetTableName(T)).
 		Columns(columns...).
