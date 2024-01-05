@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/golang-jwt/jwt"
 	"github.com/labstack/echo/v4"
+	"golang.org/x/exp/slices"
 	"log"
 	"net/http"
 	"sensor-service/internal/platform/app"
@@ -45,7 +46,7 @@ func AuthorizeJWT(cfg app.App) echo.MiddlewareFunc {
 				}
 				return next(c)
 			}
-			log.Println("sfsd?", c.Get("identity"))
+
 			return httpresponse.ResponseWithErrors(c, http.StatusUnauthorized, &httpresponse.HTTPError{
 				Code:    http.StatusUnauthorized,
 				Message: "UNAUTHORIZED",
@@ -70,10 +71,10 @@ func extractBearerToken(c echo.Context) (*string, error) {
 	return &parts[1], nil
 }
 
-func CheckRole(role string) echo.MiddlewareFunc {
+func CheckRole(privileges []string) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			if c.Get("role") != role {
+			if !slices.Contains(privileges, c.Get("role").(string)) {
 				return httpresponse.ResponseWithErrors(c, http.StatusUnauthorized, &httpresponse.HTTPError{
 					Code:    http.StatusUnauthorized,
 					Message: "UNAUTHORIZED",

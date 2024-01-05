@@ -114,8 +114,9 @@ last, set the db_migrate flag in [app.yaml](config%2Fapp.yaml) of the migration 
 
 ## 🏗️ How To Run
 open terminal cd to this project's root folder and run script below
-
-    docker-compose up --build -d
+    
+    swag init
+    docker-compose --env-file .docker.env  up
 
 ## Swagger URL
 http://0.0.0.0:8080/swagger/index.html

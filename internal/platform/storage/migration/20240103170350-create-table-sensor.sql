@@ -6,6 +6,6 @@ CREATE TABLE IF NOT EXISTS sensor (
     sensor_type varchar(100),
     ID1 varchar(100),
     ID2 int,
-    created_at timestamp default now()
+    timestamp timestamp default now()
     );
 -- +migrate Down
