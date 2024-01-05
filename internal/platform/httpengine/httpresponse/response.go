@@ -12,7 +12,7 @@ type ResponseHandler struct {
 }
 
 type Pagination struct {
-	Data         interface{} `json:"data"`
+	Data         interface{} `json:"items"`
 	TotalData    int         `json:"total_data"`
 	TotalPage    int         `json:"total_page"`
 	CurrentPage  int         `json:"current_page"`
