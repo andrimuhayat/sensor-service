@@ -5,6 +5,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/viper"
+	echoSwagger "github.com/swaggo/echo-swagger"
+	docs "sensor-service/docs" // Import the docs
+	"sensor-service/internal/module/auth"
 	"sensor-service/internal/module/sensor"
 	"sensor-service/internal/platform/app"
 	module "sensor-service/internal/platform/common"
@@ -16,7 +19,6 @@ import (
 	"sensor-service/internal/platform/storage/migration"
 )
 
-// Server httpengine service
 type Server struct {
 	DB        *sqlx.DB
 	Router    httpengine.Router
@@ -49,9 +51,17 @@ func NewServer() (*Server, error) {
 }
 
 func (s *Server) Run(config app.Config) {
+	// programmatically set swagger info
+	docs.SwaggerInfo.Title = "Sensor Service(B) API"
+	docs.SwaggerInfo.Description = "This is a swagger for Sensor Service."
+	docs.SwaggerInfo.Version = "1.0"
+	docs.SwaggerInfo.Host = "0.0.0.0:8080"
+	docs.SwaggerInfo.Schemes = []string{"http", "https"}
+
 	s.AppRouter = s.Router.GetRouter()
 	s.AppRouter.Use(internalMdw.PanicException)
 	s.AppRouter.Use(middleware.RequestID())
+	s.AppRouter.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	s.initModuleDependency(&config)
 
@@ -93,6 +103,9 @@ func (s *Server) initModuleDependency(appConfig *app.Config) module.Dependency {
 	)
 	dependency.MqttClient = mqqt.Connect("sub", appConfig.Mqtt)
 	dependency.DB = s.DB
-	sensor.StartService(dependency, s.AppRouter)
+	sensor.StartService(dependency, s.AppRouter, appConfig.App)
+	auth.StartService(dependency, s.AppRouter, appConfig.App)
+	//s.AppRouter.GET("/swagger/*", echoSwagger.WrapHandler)
+
 	return dependency
 }

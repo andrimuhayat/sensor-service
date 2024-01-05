@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/golang-jwt/jwt"
 	"github.com/iancoleman/strcase"
 	"github.com/mitchellh/mapstructure"
 	"golang.org/x/exp/slices"
@@ -23,13 +24,13 @@ import (
 )
 
 var (
+	DDMMYYYYhhmmss  = "2006-01-02 15:04:05"
+	Secretkey       = "secretkeyjwt"
 	oneToMany       = "ONETOMANY"
 	oneToOne        = "ONETOONE"
 	manyToOne       = "MANYTOONE"
 	protectedFields = []string{"created_at", "updated_at", "started_at", "ended_at", "started_at", "ended_at", "new_user_started_at", "new_user_ended_at", "timestamp", "id"}
 )
-
-var DDMMYYYYhhmmss = "2006-01-02 15:04:05"
 
 func StringBoolToBool(value string) bool {
 	if value == "true" {
@@ -551,4 +552,35 @@ func Convert12HourTo24Hour(hour string) string {
 		return ""
 	}
 	return t.Format(layout24h)
+}
+
+// take password as input and generate new hash password from it
+func GeneratehashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
+}
+
+// compare plain password with hash password
+func CheckPasswordHash(password, hash string) bool {
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
+}
+
+// Generate JWT token
+func GenerateJWT(email, role, key string) (string, error) {
+	var mySigningKey = []byte(key)
+	token := jwt.New(jwt.SigningMethodHS256)
+	claims := token.Claims.(jwt.MapClaims)
+	claims["authorized"] = true
+	claims["email"] = email
+	claims["role"] = role
+	claims["exp"] = time.Now().Add(time.Minute * 30).Unix()
+
+	tokenString, err := token.SignedString(mySigningKey)
+	if err != nil {
+		fmt.Errorf("Something went Wrong: %s", err.Error())
+		return "", err
+	}
+
+	return tokenString, nil
 }
