@@ -1,6 +1,6 @@
-# Sensor Streaming (Microservice A)
+# Sensor Service (Microservice A)
 ### version: 1.0.0
-Sensor streming or microservice A is service that collect and generate data stream to other microservices
+Sensor service or microservice B is service that consume, process the data from microservices A, also in this service has REST API sensor data and authentication & authorization check.
 
 ## Code Architecture
 This service made to containerize the allcare core service make a clear separation
@@ -56,7 +56,7 @@ In this repository, we also using 4 layers (with modification) like this:
 
     $ sql-migrate --help
     app:
-      port: 8081
+      port: 8080
       name: sensor_streaming
       secret_key: "oksecret!1"
     mysql:
@@ -118,4 +118,4 @@ open terminal cd to this project's root folder and run script below
     docker-compose up --build -d
 
 ## Swagger URL
-http://0.0.0.0:8081/swagger/index.html
+http://0.0.0.0:8080/swagger/index.html

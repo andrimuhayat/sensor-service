@@ -105,7 +105,6 @@ func (s *Server) initModuleDependency(appConfig *app.Config) module.Dependency {
 	dependency.DB = s.DB
 	sensor.StartService(dependency, s.AppRouter, appConfig.App)
 	auth.StartService(dependency, s.AppRouter, appConfig.App)
-	//s.AppRouter.GET("/swagger/*", echoSwagger.WrapHandler)
 
 	return dependency
 }
