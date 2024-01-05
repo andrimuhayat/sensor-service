@@ -1,0 +1,4 @@
+development:
+  dialect: mysql
+  datasource: dbname=postgres port=5432 user=routesroot sslmode=disable
+  dir: internal/platform/storage/migration
