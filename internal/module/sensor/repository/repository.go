@@ -4,7 +4,6 @@ import (
 	"fmt"
 	sq "github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
-	"log"
 	"sensor-service/internal/module/sensor/dto"
 	"sensor-service/internal/module/sensor/entity"
 	"sensor-service/internal/platform/helper"
@@ -51,7 +50,7 @@ func (r Repository) GetAllSensor(params dto.SensorQueryParam) (sensors []*entity
 	if err != nil {
 		return nil, err
 	}
-	log.Println(queryString)
+
 	rows, err := r.DB.Queryx(queryString, args...)
 	if err != nil {
 		return nil, err
@@ -103,7 +102,7 @@ func stringToStruct(input string) (string, string, error) {
 			} else if key == "ID2" {
 				_, err := strconv.Atoi(value)
 				if err != nil {
-					return "", "", fmt.Errorf("ID1 must be an integer")
+					return "", "", fmt.Errorf("ID2 must be an integer")
 				}
 				if ids2 == "" {
 					ids2 = fmt.Sprintf(`'%s'`, value)

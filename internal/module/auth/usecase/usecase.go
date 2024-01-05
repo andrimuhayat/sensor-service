@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"github.com/mitchellh/mapstructure"
+	"golang.org/x/exp/slices"
 	"log"
 	"net/http"
 	"sensor-service/config"
@@ -63,7 +64,7 @@ func (u UseCase) SignIn(request config.HTTPRequest) (dto.Token, *httpresponse.HT
 		httpError.Message = "Username or Password is incorrect"
 		return dto.Token{}, &httpError
 	}
-	log.Println(user.Role)
+
 	validToken, err := helper.GenerateJWT(user.Email, user.Role, u.AppCfg.SecretKey)
 	if err != nil {
 		httpError.Code = http.StatusBadRequest
@@ -94,6 +95,12 @@ func (u UseCase) SignUp(request config.HTTPRequest) (entity.User, *httpresponse.
 	}
 	if err = decoder.Decode(request.Body); err != nil {
 		log.Println("{SignIn}{Decode}{Error} : ", err)
+	}
+
+	if !slices.Contains(helper.Privileges, user.Role) {
+		httpError.Code = http.StatusBadRequest
+		httpError.Message = "Role doesn't exists, please use admin or user"
+		return entity.User{}, &httpError
 	}
 
 	authUser, err := u.GenericRepository.FindByEmail(entity.User{}, user.Email)
