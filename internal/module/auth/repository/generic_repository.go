@@ -16,10 +16,39 @@ type IGenericRepository interface {
 	FindAll(T any) ([]*any, error)
 	FindAllBy(T any, R any) ([]*any, error)
 	DeleteByID(T any, id int) error
+	FindByEmail(T any, email string) (d *any, err error)
 }
 
 type GenericRepository struct {
 	DB *sqlx.DB
+}
+
+func (r GenericRepository) FindByEmail(T any, email string) (d *any, err error) {
+	userColumn := helper.PrintFields(T)
+	queryBuilder := sq.Select(userColumn...).
+		Where(sq.Eq{"`email`": email}).
+		From(helper.GetTableName(T))
+
+	queryString, args, err := queryBuilder.PlaceholderFormat(sq.Question).ToSql()
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := r.DB.Queryx(queryString, args...)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+	for rows.Next() {
+		t := reflect.TypeOf(T)
+		val := reflect.New(t).Interface()
+		if err = rows.Scan(helper.StrutForScan(val)...); err != nil {
+			return nil, err
+		}
+		d = &val
+	}
+	return d, nil
 }
 
 func (r GenericRepository) FindAllBy(T any, R any) ([]*any, error) {
