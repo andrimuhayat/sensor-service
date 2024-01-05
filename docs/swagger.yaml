@@ -1,0 +1,224 @@
+definitions:
+  dto.Authentication:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  dto.Token:
+    properties:
+      email:
+        type: string
+      role:
+        type: string
+      token:
+        type: string
+    type: object
+  entity.User:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+      roles:
+        type: string
+    type: object
+  httpresponse.Pagination:
+    properties:
+      current_page:
+        type: integer
+      data: {}
+      total_data:
+        type: integer
+      total_page:
+        type: integer
+      total_per_page:
+        type: integer
+    type: object
+  httpresponse.ResponseHandler:
+    properties:
+      data: {}
+      message:
+        type: string
+      status_code:
+        type: integer
+    type: object
+info:
+  contact: {}
+paths:
+  /api/sensor:
+    delete:
+      consumes:
+      - application/json
+      description: Delete Sensor Data
+      parameters:
+      - description: 'example: [ID1=A, ID2=1], [ID1=B, ID2=2]'
+        in: query
+        name: combination_ids
+        required: true
+        type: string
+      - description: 'example: 01:30AM'
+        in: query
+        name: hour_from
+        required: true
+        type: string
+      - description: 'example: 03:40PM'
+        in: query
+        name: hour_to
+        required: true
+        type: string
+      - description: 'example: 2024-01-02'
+        in: query
+        name: date_from
+        required: true
+        type: string
+      - description: 'example: 2024-01-02'
+        in: query
+        name: date_to
+        required: true
+        type: string
+      - default: Bearer <Add access token here>
+        description: Insert your access token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httpresponse.ResponseHandler'
+      summary: Delete Sensor
+    get:
+      consumes:
+      - application/json
+      description: List Sensor Data
+      parameters:
+      - description: 'example: [ID1=A, ID2=1], [ID1=B, ID2=2]'
+        in: query
+        name: combination_ids
+        type: string
+      - description: 'example: 01:30AM'
+        in: query
+        name: hour_from
+        type: string
+      - description: 'example: 03:40PM'
+        in: query
+        name: hour_to
+        type: string
+      - description: 'example: 2024-01-02'
+        in: query
+        name: date_from
+        type: string
+      - description: 'example: 2024-01-02'
+        in: query
+        name: date_to
+        type: string
+      - default: Bearer <Add access token here>
+        description: Insert your access token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httpresponse.Pagination'
+      summary: Get List Sensor
+    patch:
+      consumes:
+      - application/json
+      description: Update Sensor Data
+      parameters:
+      - description: Sensor Value
+        in: body
+        name: sensor_value
+        required: true
+        schema:
+          type: number
+      - description: 'example: [ID1=A, ID2=1], [ID1=B, ID2=2]'
+        in: query
+        name: combination_ids
+        required: true
+        type: string
+      - description: 'example: 01:30AM'
+        in: query
+        name: hour_from
+        required: true
+        type: string
+      - description: 'example: 03:40PM'
+        in: query
+        name: hour_to
+        required: true
+        type: string
+      - description: 'example: 2024-01-02'
+        in: query
+        name: date_from
+        required: true
+        type: string
+      - description: 'example: 2024-01-02'
+        in: query
+        name: date_to
+        required: true
+        type: string
+      - default: Bearer <Add access token here>
+        description: Insert your access token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/httpresponse.ResponseHandler'
+      summary: Update Sensor
+  /api/user/signin:
+    post:
+      consumes:
+      - application/json
+      description: Login User
+      parameters:
+      - description: Sign In
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/dto.Authentication'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.Token'
+      summary: Sign User
+  /api/user/signup:
+    post:
+      consumes:
+      - application/json
+      description: signup User
+      parameters:
+      - description: Sign In
+        in: body
+        name: data
+        required: true
+        schema:
+          $ref: '#/definitions/entity.User'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.User'
+      summary: signup User
+swagger: "2.0"

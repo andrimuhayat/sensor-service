@@ -11,7 +11,7 @@ func MigrationRubenv(conn *sqlx.DB) {
 	migrations := &migrate.FileMigrationSource{
 		Dir: "internal/platform/storage/migration",
 	}
-	migrate.SetTable("claims_migrations")
+	migrate.SetTable("sensor_migrations")
 
 	var migrateType = migrate.Up
 	//if helper.GetEnv("MIGRATE_TYPE") == "down" {
