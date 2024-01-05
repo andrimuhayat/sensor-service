@@ -1,6 +1,6 @@
 # Sensor Service (Microservice B)
 ### version: 1.0.0
-Sensor service or microservice B is service that consume, process the data from microservices A, also in this service has REST API sensor data and authentication & authorization check.
+Sensor service or microservice B is service that consume and process the data from microservices A, also in this service has REST API sensor data, authentication & authorization check. please be make sure the [Sensor streaming(A)](https://github.com/andrimuhayat/sensor-streaming) running first.
 
 ## Code Architecture
 This service made to containerize the allcare core service make a clear separation
