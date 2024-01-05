@@ -95,10 +95,10 @@ Please setup the docker environment in this file [.env.docker](.env.docker).
     datasource: dbname=postgres port=5432 user=routesroot sslmode=disable
     dir: internal/platform/storage/migration
 
+command migration,
+
     $ sql-migrate --help
     usage: sql-migrate [--version] [--help] <command> [<args>]
-
-command migration,
 
     Available commands are:
     down      Undo a database migration
