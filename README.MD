@@ -54,7 +54,6 @@ In this repository, we also using 4 layers (with modification) like this:
 ### Environment App
   Please setup the backend environment in this file [app.yaml](config%2Fapp.yaml).
 
-    $ sql-migrate --help
     app:
       port: 8080
       name: sensor_streaming
