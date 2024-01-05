@@ -20,3 +20,7 @@ type SensorDataGenerateRequest struct {
 	ID2         int       `json:"ID2"`
 	Timestamp   time.Time `json:"timestamp"`
 }
+
+type SensorUpdateRequest struct {
+	SensorValue float32 `json:"sensor_value"`
+}

@@ -25,6 +25,8 @@ func (h Handler) Health(c echo.Context) error {
 // @Param   hour_to query string false "example: 03:40PM"
 // @Param   date_from query string false "example: 2024-01-02"
 // @Param   date_to query string false "example: 2024-01-02"
+// @Param   limit query string false "example: 10"
+// @Param   page query string false "example: 1"
 // @Success 200 {object} httpresponse.Pagination
 // @Router /api/sensor [get]
 // @Param Authorization header string true "Insert your access token" default(Bearer <Add access token here>)
@@ -46,7 +48,7 @@ func (h Handler) GetAllSensor(c echo.Context) error {
 // @Description Update Sensor Data
 // @Accept  json
 // @Produce  json
-// @Param  sensor_value body number true "Sensor Value"
+// @Param   data body dto.SensorUpdateRequest true "Sensor Value"
 // @Param   combination_ids query string true "example: [ID1=A, ID2=1], [ID1=B, ID2=2]"
 // @Param   hour_from query string true "example: 01:30AM"
 // @Param   hour_to query string true "example: 03:40PM"
