@@ -1,4 +1,4 @@
-# Sensor Service (Microservice A)
+# Sensor Service (Microservice B)
 ### version: 1.0.0
 Sensor service or microservice B is service that consume, process the data from microservices A, also in this service has REST API sensor data and authentication & authorization check.
 
