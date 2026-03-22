@@ -65,7 +65,7 @@ type IUseCase interface {
 	Logout(token string) *httpresponse.HTTPError
 	ChangePassword(email string, oldPassword string, newPassword string) *httpresponse.HTTPError
 	RemoveUser(email string, callerRole string) *httpresponse.HTTPError
-	ChangeUserStatus(email string, isActivated bool, callerRole string) *httpresponse.HTTPError
+	ChangeUserStatus(email string, callerRole string, newStatus string) *httpresponse.HTTPError
 }
 
 type UseCase struct {
@@ -116,13 +116,6 @@ func (u UseCase) SignIn(request config.HTTPRequest) (dto.Token, *httpresponse.HT
 	}
 
 	user, _ := helper.TypeConverter[entity.User](&authUser)
-
-	// Check if user is activated - O(1) status check
-	if !user.Status {
-		httpError.Code = http.StatusForbidden
-		httpError.Message = "User account is deactivated"
-		return dto.Token{}, &httpError
-	}
 
 	check := helper.CheckPasswordHash(requestAuth.Password, user.Password)
 
@@ -194,9 +187,6 @@ func (u UseCase) SignUp(request config.HTTPRequest) (entity.User, *httpresponse.
 	if err != nil {
 		log.Fatalln("Error in password hashing.")
 	}
-
-	// Default status to true (activated) for new users
-	user.Status = true
 
 	err = u.GenericRepository.Create(user)
 	if err != nil {
@@ -426,13 +416,20 @@ func (u UseCase) RemoveUser(email string, callerRole string) *httpresponse.HTTPE
 
 // ChangeUserStatus activates or deactivates a user account - restricted to admin role only
 // O(1) authorization check + O(n) DB query where n = 1 (indexed email) + O(n) DB update where n = 1
-func (u UseCase) ChangeUserStatus(email string, isActivated bool, callerRole string) *httpresponse.HTTPError {
+func (u UseCase) ChangeUserStatus(email string, callerRole string, newStatus string) *httpresponse.HTTPError {
 	httpError := httpresponse.HTTPError{}
 
 	// Authorization check: only admin role can change user status - O(1) check
 	if callerRole != "admin" {
 		httpError.Code = http.StatusForbidden
 		httpError.Message = "Forbidden: only admin can change user status"
+		return &httpError
+	}
+
+	// Validate status value - O(1) check
+	if newStatus != "activated" && newStatus != "deactivated" {
+		httpError.Code = http.StatusBadRequest
+		httpError.Message = "Invalid status: must be 'activated' or 'deactivated'"
 		return &httpError
 	}
 
@@ -453,15 +450,8 @@ func (u UseCase) ChangeUserStatus(email string, isActivated bool, callerRole str
 
 	user, _ := helper.TypeConverter[entity.User](&authUser)
 
-	// Prevent admin from deactivating themselves
-	if user.Email == email && !isActivated {
-		httpError.Code = http.StatusBadRequest
-		httpError.Message = "Cannot deactivate your own account"
-		return &httpError
-	}
-
 	// Update user status - O(n) DB update where n = 1 (indexed email)
-	user.Status = isActivated
+	user.Status = newStatus
 
 	if err := u.GenericRepository.Update(user); err != nil {
 		log.Println("{ChangeUserStatus}{Update}{Error} : ", err)
