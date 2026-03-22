@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -68,9 +70,9 @@ func (rl *RateLimiter) RateLimit() echo.MiddlewareFunc {
 			if remaining < 0 {
 				remaining = 0
 			}
-			c.Response().Header().Set("X-RateLimit-Limit", string(rune(rl.config.MaxRequests)))
-			c.Response().Header().Set("X-RateLimit-Remaining", string(rune(remaining)))
-			c.Response().Header().Set("X-RateLimit-Reset", string(rune(rl.getResetTime(clientID))))
+			c.Response().Header().Set("X-RateLimit-Limit", strconv.Itoa(rl.config.MaxRequests))
+			c.Response().Header().Set("X-RateLimit-Remaining", strconv.Itoa(remaining))
+			c.Response().Header().Set("X-RateLimit-Reset", strconv.Itoa(rl.getResetTime(clientID)))
 
 			return next(c)
 		}
@@ -173,8 +175,9 @@ func getClientID(c echo.Context) string {
 	ip := c.Request().Header.Get("X-Forwarded-For")
 	if ip != "" {
 		// Take the first IP if multiple are present
-		for _, part := range split(ip, ",") {
-			trimmed := trim(part)
+		parts := strings.Split(ip, ",")
+		for _, part := range parts {
+			trimmed := strings.TrimSpace(part)
 			if trimmed != "" {
 				return trimmed
 			}
@@ -200,34 +203,6 @@ func getClientID(c echo.Context) string {
 		}
 	}
 	return remoteAddr
-}
-
-// split is a simple string split function
-func split(s, sep string) []string {
-	var result []string
-	start := 0
-	for i := 0; i <= len(s)-len(sep); i++ {
-		if s[i:i+len(sep)] == sep {
-			result = append(result, s[start:i])
-			start = i + len(sep)
-			i = start - 1
-		}
-	}
-	result = append(result, s[start:])
-	return result
-}
-
-// trim removes leading and trailing whitespace
-func trim(s string) string {
-	start := 0
-	end := len(s)
-	for start < end && (s[start] == ' ' || s[start] == '\t' || s[start] == '\n' || s[start] == '\r') {
-		start++
-	}
-	for end > start && (s[end-1] == ' ' || s[end-1] == '\t' || s[end-1] == '\n' || s[end-1] == '\r') {
-		end--
-	}
-	return s[start:end]
 }
 
 // Reset clears all client data
