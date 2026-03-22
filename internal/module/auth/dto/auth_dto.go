@@ -17,3 +17,9 @@ type ChangePasswordRequest struct {
 	OldPassword string `json:"old_password"`
 	NewPassword string `json:"new_password"`
 }
+
+// ChangeUserStatusRequest for activating or deactivating user account (admin only)
+type ChangeUserStatusRequest struct {
+	Email     string `json:"email"`
+	NewStatus string `json:"new_status"`
+}
