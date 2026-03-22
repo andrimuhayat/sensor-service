@@ -86,6 +86,36 @@ func (h Handler) ChangePassword(c echo.Context) error {
 	return httpresponse.ResponseWithJSON(c, http.StatusOK, httpresponse.ResponseSuccess(http.StatusOK, "success", nil))
 }
 
+// @Summary Remove User
+// @Description Remove user by email (requires authentication)
+// @Accept  json
+// @Produce  json
+// @Param data body RemoveUserRequest true "Remove User"
+// @Success 200 {object} httpresponse.ResponseHandler
+// @Router /api/user/removeuser [post]
+// @Param Authorization header string true "Insert your access token" default(Bearer <Add access token here>)
+func (h Handler) RemoveUser(c echo.Context) error {
+	request, err := config.MappingRequest(c)
+	if err != nil {
+		return httpresponse.ResponseWithError(c, http.StatusInternalServerError, err.Error())
+	}
+
+	var removeUserReq struct {
+		Email string `json:"email"`
+	}
+
+	if err := config.MapToStruct(request.Body, &removeUserReq); err != nil {
+		return httpresponse.ResponseWithError(c, http.StatusBadRequest, err.Error())
+	}
+
+	errs := h.UseCase.RemoveUser(removeUserReq.Email)
+	if errs != nil {
+		return httpresponse.ResponseWithErrors(c, errs.Code, errs)
+	}
+
+	return httpresponse.ResponseWithJSON(c, http.StatusOK, httpresponse.ResponseSuccess(http.StatusOK, "success", nil))
+}
+
 func NewHandler(useCase auth.IUseCase) Handler {
 	return Handler{
 		UseCase: useCase,

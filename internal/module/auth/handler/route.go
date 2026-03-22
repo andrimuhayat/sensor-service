@@ -9,4 +9,5 @@ func NewAuthRoute(h Handler, route *echo.Group) {
 	sensor.POST("/signin", h.SignIn)
 	sensor.POST("/signup", h.SignUp)
 	sensor.PUT("/changepassword", h.ChangePassword)
+	sensor.POST("/removeuser", h.RemoveUser)
 }
