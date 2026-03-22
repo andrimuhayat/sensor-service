@@ -15,16 +15,17 @@ import (
 
 // MockUseCase implements auth.IUseCase for testing
 type MockUseCase struct {
-	SignInFunc               func(request interface{}) (dto.Token, *httpresponse.HTTPError)
+	SignInFunc                func(request interface{}) (dto.Token, *httpresponse.HTTPError)
 	SignUpFunc                func(request interface{}) (entity.User, *httpresponse.HTTPError)
-	RefreshTokenFunc         func(oldToken string) (dto.Token, *httpresponse.HTTPError)
+	RefreshTokenFunc          func(oldToken string) (dto.Token, *httpresponse.HTTPError)
 	InitiatePasswordResetFunc func(email string) (string, *httpresponse.HTTPError)
 	ResetPasswordFunc         func(resetToken string, newPassword string) *httpresponse.HTTPError
 	ValidateSessionFunc       func(email string) (bool, *httpresponse.HTTPError)
 	CheckRateLimitFunc        func(email string) (bool, *httpresponse.HTTPError)
 	LogoutFunc                func(token string) *httpresponse.HTTPError
-	ChangePasswordFunc        func(email string, oldPassword string, newPassword string) *httpresponse.HTTPError
+	ChangePasswordFunc         func(email string, oldPassword string, newPassword string) *httpresponse.HTTPError
 	RemoveUserFunc            func(email string, callerRole string) *httpresponse.HTTPError
+	ChangeUserStatusFunc      func(email string, callerRole string, newStatus string) *httpresponse.HTTPError
 }
 
 func (m *MockUseCase) SignIn(request interface{}) (dto.Token, *httpresponse.HTTPError) {
@@ -97,7 +98,14 @@ func (m *MockUseCase) RemoveUser(email string, callerRole string) *httpresponse.
 	return nil
 }
 
-// Helper function to create test request
+func (m *MockUseCase) ChangeUserStatus(email string, callerRole string, newStatus string) *httpresponse.HTTPError {
+	if m.ChangeUserStatusFunc != nil {
+		return m.ChangeUserStatusFunc(email, callerRole, newStatus)
+	}
+	return nil
+}
+
+// Helper function to create test request for RemoveUser
 func createRemoveUserRequest(email string) *httptest.Request {
 	reqBody := `{"email": "` + email + `"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/user/removeuser", strings.NewReader(reqBody))
@@ -105,10 +113,28 @@ func createRemoveUserRequest(email string) *httptest.Request {
 	return req
 }
 
-// Helper function to create test context with role
+// Helper function to create test context with role for RemoveUser
 func createRemoveUserContext(email string, role string) (echo.Context, *httptest.ResponseRecorder) {
 	e := echo.New()
 	req := createRemoveUserRequest(email)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("role", role)
+	return c, rec
+}
+
+// Helper function to create test request for ChangeUserStatus
+func createChangeUserStatusRequest(email string, newStatus string) *httptest.Request {
+	reqBody := `{"email": "` + email + `", "new_status": "` + newStatus + `"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/user/changestatus", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	return req
+}
+
+// Helper function to create test context with role for ChangeUserStatus
+func createChangeUserStatusContext(email string, newStatus string, role string) (echo.Context, *httptest.ResponseRecorder) {
+	e := echo.New()
+	req := createChangeUserStatusRequest(email, newStatus)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.Set("role", role)
@@ -375,5 +401,392 @@ func TestHandler_RemoveUser_ShouldReturnUnauthorizedWhenRoleMissing(t *testing.T
 	// Assert
 	if err == nil && rec.Code == http.StatusOK {
 		t.Error("Expected unauthorized error when role is missing from context")
+	}
+}
+
+// ============================================================================
+// ChangeUserStatus Tests
+// ============================================================================
+
+// TestHandler_ChangeUserStatus_ShouldReturnSuccessWhenAdminActivatesUser tests successful user activation by admin
+func TestHandler_ChangeUserStatus_ShouldReturnSuccessWhenAdminActivatesUser(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	mockUseCase.ChangeUserStatusFunc = func(email string, callerRole string, newStatus string) *httpresponse.HTTPError {
+		if email == "user@example.com" && callerRole == "admin" && newStatus == "activated" {
+			return nil
+		}
+		if callerRole != "admin" {
+			return &httpresponse.HTTPError{Code: http.StatusForbidden, Message: "Forbidden: only admin can change user status"}
+		}
+		return &httpresponse.HTTPError{Code: http.StatusBadRequest, Message: "User not found"}
+	}
+
+	handler := NewHandler(mockUseCase)
+	c, rec := createChangeUserStatusContext("user@example.com", "activated", "admin")
+
+	// Act
+	err := handler.ChangeUserStatus(c)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var response httpresponse.ResponseHandler
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+	if response.Status != http.StatusOK {
+		t.Errorf("Expected response status %d, got %d", http.StatusOK, response.Status)
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldReturnSuccessWhenAdminDeactivatesUser tests successful user deactivation by admin
+func TestHandler_ChangeUserStatus_ShouldReturnSuccessWhenAdminDeactivatesUser(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	mockUseCase.ChangeUserStatusFunc = func(email string, callerRole string, newStatus string) *httpresponse.HTTPError {
+		if email == "user@example.com" && callerRole == "admin" && newStatus == "deactivated" {
+			return nil
+		}
+		if callerRole != "admin" {
+			return &httpresponse.HTTPError{Code: http.StatusForbidden, Message: "Forbidden: only admin can change user status"}
+		}
+		return &httpresponse.HTTPError{Code: http.StatusBadRequest, Message: "User not found"}
+	}
+
+	handler := NewHandler(mockUseCase)
+	c, rec := createChangeUserStatusContext("user@example.com", "deactivated", "admin")
+
+	// Act
+	err := handler.ChangeUserStatus(c)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+	if rec.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, rec.Code)
+	}
+
+	var response httpresponse.ResponseHandler
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+	if response.Status != http.StatusOK {
+		t.Errorf("Expected response status %d, got %d", http.StatusOK, response.Status)
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldReturnForbiddenWhenNonAdminChangesStatus tests that non-admin cannot change user status
+func TestHandler_ChangeUserStatus_ShouldReturnForbiddenWhenNonAdminChangesStatus(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	mockUseCase.ChangeUserStatusFunc = func(email string, callerRole string, newStatus string) *httpresponse.HTTPError {
+		if callerRole != "admin" {
+			return &httpresponse.HTTPError{Code: http.StatusForbidden, Message: "Forbidden: only admin can change user status"}
+		}
+		return nil
+	}
+
+	handler := NewHandler(mockUseCase)
+	c, rec := createChangeUserStatusContext("user@example.com", "activated", "user")
+
+	// Act
+	err := handler.ChangeUserStatus(c)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error (error is returned via response), got %v", err)
+	}
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("Expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+
+	var response httpresponse.ResponseHandler
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+	if response.Status != http.StatusForbidden {
+		t.Errorf("Expected response status %d, got %d", http.StatusForbidden, response.Status)
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldReturnErrorWhenUserNotFound tests change status of non-existent user
+func TestHandler_ChangeUserStatus_ShouldReturnErrorWhenUserNotFound(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	mockUseCase.ChangeUserStatusFunc = func(email string, callerRole string, newStatus string) *httpresponse.HTTPError {
+		return &httpresponse.HTTPError{Code: http.StatusBadRequest, Message: "User not found"}
+	}
+
+	handler := NewHandler(mockUseCase)
+	c, rec := createChangeUserStatusContext("nonexistent@example.com", "activated", "admin")
+
+	// Act
+	err := handler.ChangeUserStatus(c)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error (error is returned via response), got %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	var response httpresponse.ResponseHandler
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+	if response.Status != http.StatusBadRequest {
+		t.Errorf("Expected response status %d, got %d", http.StatusBadRequest, response.Status)
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldReturnErrorWhenInvalidStatus tests invalid status value
+func TestHandler_ChangeUserStatus_ShouldReturnErrorWhenInvalidStatus(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	mockUseCase.ChangeUserStatusFunc = func(email string, callerRole string, newStatus string) *httpresponse.HTTPError {
+		return &httpresponse.HTTPError{Code: http.StatusBadRequest, Message: "Invalid status: must be 'activated' or 'deactivated'"}
+	}
+
+	handler := NewHandler(mockUseCase)
+	c, rec := createChangeUserStatusContext("user@example.com", "invalid_status", "admin")
+
+	// Act
+	err := handler.ChangeUserStatus(c)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error (error is returned via response), got %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+
+	var response httpresponse.HTTPError
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+	if !strings.Contains(response.Message, "Invalid status") {
+		t.Errorf("Expected error message to contain 'Invalid status', got '%s'", response.Message)
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldReturnErrorWhenInternalServerError tests internal server error
+func TestHandler_ChangeUserStatus_ShouldReturnErrorWhenInternalServerError(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	mockUseCase.ChangeUserStatusFunc = func(email string, callerRole string, newStatus string) *httpresponse.HTTPError {
+		return &httpresponse.HTTPError{Code: http.StatusInternalServerError, Message: "Internal server error"}
+	}
+
+	handler := NewHandler(mockUseCase)
+	c, rec := createChangeUserStatusContext("user@example.com", "activated", "admin")
+
+	// Act
+	err := handler.ChangeUserStatus(c)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error (error is returned via response), got %v", err)
+	}
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, rec.Code)
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldReturnErrorWhenEmailEmpty tests empty email request
+func TestHandler_ChangeUserStatus_ShouldReturnErrorWhenEmailEmpty(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	handler := NewHandler(mockUseCase)
+	e := echo.New()
+	reqBody := `{"email": "", "new_status": "activated"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/user/changestatus", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("role", "admin")
+
+	// Act
+	err := handler.ChangeUserStatus(c)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error (error is returned via response), got %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldReturnErrorWhenStatusEmpty tests empty status request
+func TestHandler_ChangeUserStatus_ShouldReturnErrorWhenStatusEmpty(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	handler := NewHandler(mockUseCase)
+	e := echo.New()
+	reqBody := `{"email": "user@example.com", "new_status": ""}`
+	req := httptest.NewRequest(http.MethodPost, "/api/user/changestatus", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("role", "admin")
+
+	// Act
+	err := handler.ChangeUserStatus(c)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error (error is returned via response), got %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, rec.Code)
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldReturnErrorWhenInvalidJSON tests malformed JSON request
+func TestHandler_ChangeUserStatus_ShouldReturnErrorWhenInvalidJSON(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	handler := NewHandler(mockUseCase)
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/api/user/changestatus", strings.NewReader(`{invalid json}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("role", "admin")
+
+	// Act
+	err := handler.ChangeUserStatus(c)
+
+	// Assert
+	// Error should be returned because JSON is invalid
+	if err == nil && rec.Code == http.StatusOK {
+		t.Error("Expected error or bad request for invalid JSON")
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldReturnSuccessForDifferentEmailFormats tests various email formats
+func TestHandler_ChangeUserStatus_ShouldReturnSuccessForDifferentEmailFormats(t *testing.T) {
+	// Arrange
+	emails := []string{"user@example.com", "test.user@domain.org", "admin@company.co.id"}
+
+	for _, email := range emails {
+		mockUseCase := &MockUseCase{}
+		mockUseCase.ChangeUserStatusFunc = func(e string, callerRole string, newStatus string) *httpresponse.HTTPError {
+			if e == email && callerRole == "admin" && newStatus == "activated" {
+				return nil
+			}
+			if callerRole != "admin" {
+				return &httpresponse.HTTPError{Code: http.StatusForbidden, Message: "Forbidden: only admin can change user status"}
+			}
+			return &httpresponse.HTTPError{Code: http.StatusBadRequest, Message: "User not found"}
+		}
+
+		handler := NewHandler(mockUseCase)
+		c, rec := createChangeUserStatusContext(email, "activated", "admin")
+
+		// Act
+		err := handler.ChangeUserStatus(c)
+
+		// Assert
+		if err != nil {
+			t.Errorf("For email %s: Expected no error, got %v", email, err)
+		}
+		if rec.Code != http.StatusOK {
+			t.Errorf("For email %s: Expected status %d, got %d", email, http.StatusOK, rec.Code)
+		}
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldCallUseCaseWithCorrectParameters tests that handler passes correct parameters to use case
+func TestHandler_ChangeUserStatus_ShouldCallUseCaseWithCorrectParameters(t *testing.T) {
+	// Arrange
+	expectedEmail := "specific.user@test.org"
+	expectedRole := "admin"
+	expectedStatus := "deactivated"
+	actualEmail := ""
+	actualRole := ""
+	actualStatus := ""
+
+	mockUseCase := &MockUseCase{}
+	mockUseCase.ChangeUserStatusFunc = func(email string, callerRole string, newStatus string) *httpresponse.HTTPError {
+		actualEmail = email
+		actualRole = callerRole
+		actualStatus = newStatus
+		return nil
+	}
+
+	handler := NewHandler(mockUseCase)
+	c, _ := createChangeUserStatusContext(expectedEmail, expectedStatus, expectedRole)
+
+	// Act
+	_ = handler.ChangeUserStatus(c)
+
+	// Assert
+	if actualEmail != expectedEmail {
+		t.Errorf("Expected use case to be called with email '%s', got '%s'", expectedEmail, actualEmail)
+	}
+	if actualRole != expectedRole {
+		t.Errorf("Expected use case to be called with role '%s', got '%s'", expectedRole, actualRole)
+	}
+	if actualStatus != expectedStatus {
+		t.Errorf("Expected use case to be called with status '%s', got '%s'", expectedStatus, actualStatus)
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldReturnUnauthorizedWhenRoleMissing tests when role is missing from context
+func TestHandler_ChangeUserStatus_ShouldReturnUnauthorizedWhenRoleMissing(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	mockUseCase.ChangeUserStatusFunc = func(email string, callerRole string, newStatus string) *httpresponse.HTTPError {
+		return nil
+	}
+
+	handler := NewHandler(mockUseCase)
+	e := echo.New()
+	req := createChangeUserStatusRequest("user@example.com", "activated")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	// Note: role is NOT set in context
+
+	// Act
+	err := handler.ChangeUserStatus(c)
+
+	// Assert
+	if err == nil && rec.Code == http.StatusOK {
+		t.Error("Expected unauthorized error when role is missing from context")
+	}
+}
+
+// TestHandler_ChangeUserStatus_ShouldReturnErrorWhenBothEmailAndStatusEmpty tests when both email and status are empty
+func TestHandler_ChangeUserStatus_ShouldReturnErrorWhenBothEmailAndStatusEmpty(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	handler := NewHandler(mockUseCase)
+	e := echo.New()
+	reqBody := `{"email": "", "new_status": ""}`
+	req := httptest.NewRequest(http.MethodPost, "/api/user/changestatus", strings.NewReader(reqBody))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("role", "admin")
+
+	// Act
+	err := handler.ChangeUserStatus(c)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error (error is returned via response), got %v", err)
+	}
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, rec.Code)
 	}
 }
