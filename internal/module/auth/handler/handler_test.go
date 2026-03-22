@@ -24,7 +24,7 @@ type MockUseCase struct {
 	CheckRateLimitFunc        func(email string) (bool, *httpresponse.HTTPError)
 	LogoutFunc                func(token string) *httpresponse.HTTPError
 	ChangePasswordFunc        func(email string, oldPassword string, newPassword string) *httpresponse.HTTPError
-	RemoveUserFunc            func(email string) *httpresponse.HTTPError
+	RemoveUserFunc            func(email string, callerRole string) *httpresponse.HTTPError
 }
 
 func (m *MockUseCase) SignIn(request interface{}) (dto.Token, *httpresponse.HTTPError) {
@@ -90,9 +90,9 @@ func (m *MockUseCase) ChangePassword(email string, oldPassword string, newPasswo
 	return nil
 }
 
-func (m *MockUseCase) RemoveUser(email string) *httpresponse.HTTPError {
+func (m *MockUseCase) RemoveUser(email string, callerRole string) *httpresponse.HTTPError {
 	if m.RemoveUserFunc != nil {
-		return m.RemoveUserFunc(email)
+		return m.RemoveUserFunc(email, callerRole)
 	}
 	return nil
 }
@@ -105,26 +105,36 @@ func createRemoveUserRequest(email string) *httptest.Request {
 	return req
 }
 
+// Helper function to create test context with role
+func createRemoveUserContext(email string, role string) (echo.Context, *httptest.ResponseRecorder) {
+	e := echo.New()
+	req := createRemoveUserRequest(email)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.Set("role", role)
+	return c, rec
+}
+
 // ============================================================================
 // RemoveUser Tests
 // ============================================================================
 
-// TestHandler_RemoveUser_ShouldReturnSuccessWhenUserExists tests successful user removal
-func TestHandler_RemoveUser_ShouldReturnSuccessWhenUserExists(t *testing.T) {
+// TestHandler_RemoveUser_ShouldReturnSuccessWhenAdminRemovesUser tests successful user removal by admin
+func TestHandler_RemoveUser_ShouldReturnSuccessWhenAdminRemovesUser(t *testing.T) {
 	// Arrange
 	mockUseCase := &MockUseCase{}
-	mockUseCase.RemoveUserFunc = func(email string) *httpresponse.HTTPError {
-		if email == "user@example.com" {
+	mockUseCase.RemoveUserFunc = func(email string, callerRole string) *httpresponse.HTTPError {
+		if email == "user@example.com" && callerRole == "admin" {
 			return nil
+		}
+		if callerRole != "admin" {
+			return &httpresponse.HTTPError{Code: http.StatusForbidden, Message: "Forbidden: only admin can remove users"}
 		}
 		return &httpresponse.HTTPError{Code: http.StatusBadRequest, Message: "User not found"}
 	}
 
 	handler := NewHandler(mockUseCase)
-	e := echo.New()
-	req := createRemoveUserRequest("user@example.com")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	c, rec := createRemoveUserContext("user@example.com", "admin")
 
 	// Act
 	err := handler.RemoveUser(c)
@@ -146,19 +156,50 @@ func TestHandler_RemoveUser_ShouldReturnSuccessWhenUserExists(t *testing.T) {
 	}
 }
 
+// TestHandler_RemoveUser_ShouldReturnForbiddenWhenNonAdminRemovesUser tests that non-admin cannot remove users
+func TestHandler_RemoveUser_ShouldReturnForbiddenWhenNonAdminRemovesUser(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	mockUseCase.RemoveUserFunc = func(email string, callerRole string) *httpresponse.HTTPError {
+		if callerRole != "admin" {
+			return &httpresponse.HTTPError{Code: http.StatusForbidden, Message: "Forbidden: only admin can remove users"}
+		}
+		return nil
+	}
+
+	handler := NewHandler(mockUseCase)
+	c, rec := createRemoveUserContext("user@example.com", "user")
+
+	// Act
+	err := handler.RemoveUser(c)
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error (error is returned via response), got %v", err)
+	}
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("Expected status %d, got %d", http.StatusForbidden, rec.Code)
+	}
+
+	var response httpresponse.ResponseHandler
+	if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+		t.Fatalf("Failed to unmarshal response: %v", err)
+	}
+	if response.Status != http.StatusForbidden {
+		t.Errorf("Expected response status %d, got %d", http.StatusForbidden, response.Status)
+	}
+}
+
 // TestHandler_RemoveUser_ShouldReturnErrorWhenUserNotFound tests removal of non-existent user
 func TestHandler_RemoveUser_ShouldReturnErrorWhenUserNotFound(t *testing.T) {
 	// Arrange
 	mockUseCase := &MockUseCase{}
-	mockUseCase.RemoveUserFunc = func(email string) *httpresponse.HTTPError {
+	mockUseCase.RemoveUserFunc = func(email string, callerRole string) *httpresponse.HTTPError {
 		return &httpresponse.HTTPError{Code: http.StatusBadRequest, Message: "User not found"}
 	}
 
 	handler := NewHandler(mockUseCase)
-	e := echo.New()
-	req := createRemoveUserRequest("nonexistent@example.com")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	c, rec := createRemoveUserContext("nonexistent@example.com", "admin")
 
 	// Act
 	err := handler.RemoveUser(c)
@@ -184,15 +225,12 @@ func TestHandler_RemoveUser_ShouldReturnErrorWhenUserNotFound(t *testing.T) {
 func TestHandler_RemoveUser_ShouldReturnErrorWhenInternalServerError(t *testing.T) {
 	// Arrange
 	mockUseCase := &MockUseCase{}
-	mockUseCase.RemoveUserFunc = func(email string) *httpresponse.HTTPError {
+	mockUseCase.RemoveUserFunc = func(email string, callerRole string) *httpresponse.HTTPError {
 		return &httpresponse.HTTPError{Code: http.StatusInternalServerError, Message: "Internal server error"}
 	}
 
 	handler := NewHandler(mockUseCase)
-	e := echo.New()
-	req := createRemoveUserRequest("user@example.com")
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	c, rec := createRemoveUserContext("user@example.com", "admin")
 
 	// Act
 	err := handler.RemoveUser(c)
@@ -210,14 +248,6 @@ func TestHandler_RemoveUser_ShouldReturnErrorWhenInternalServerError(t *testing.
 func TestHandler_RemoveUser_ShouldReturnErrorWhenEmailEmpty(t *testing.T) {
 	// Arrange
 	mockUseCase := &MockUseCase{}
-	// When email is empty, the use case should be called with empty string
-	mockUseCase.RemoveUserFunc = func(email string) *httpresponse.HTTPError {
-		if email == "" {
-			return &httpresponse.HTTPError{Code: http.StatusBadRequest, Message: "Email is required"}
-		}
-		return nil
-	}
-
 	handler := NewHandler(mockUseCase)
 	e := echo.New()
 	reqBody := `{"email": ""}`
@@ -225,6 +255,7 @@ func TestHandler_RemoveUser_ShouldReturnErrorWhenEmailEmpty(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	c.Set("role", "admin")
 
 	// Act
 	err := handler.RemoveUser(c)
@@ -248,6 +279,7 @@ func TestHandler_RemoveUser_ShouldReturnErrorWhenInvalidJSON(t *testing.T) {
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
+	c.Set("role", "admin")
 
 	// Act
 	err := handler.RemoveUser(c)
@@ -266,18 +298,18 @@ func TestHandler_RemoveUser_ShouldReturnSuccessForDifferentEmailFormats(t *testi
 
 	for _, email := range emails {
 		mockUseCase := &MockUseCase{}
-		mockUseCase.RemoveUserFunc = func(e string) *httpresponse.HTTPError {
-			if e == email {
+		mockUseCase.RemoveUserFunc = func(e string, callerRole string) *httpresponse.HTTPError {
+			if e == email && callerRole == "admin" {
 				return nil
+			}
+			if callerRole != "admin" {
+				return &httpresponse.HTTPError{Code: http.StatusForbidden, Message: "Forbidden: only admin can remove users"}
 			}
 			return &httpresponse.HTTPError{Code: http.StatusBadRequest, Message: "User not found"}
 		}
 
 		handler := NewHandler(mockUseCase)
-		e := echo.New()
-		req := createRemoveUserRequest(email)
-		rec := httptest.NewRecorder()
-		c := e.NewContext(req, rec)
+		c, rec := createRemoveUserContext(email, "admin")
 
 		// Act
 		err := handler.RemoveUser(c)
@@ -292,23 +324,23 @@ func TestHandler_RemoveUser_ShouldReturnSuccessForDifferentEmailFormats(t *testi
 	}
 }
 
-// TestHandler_RemoveUser_ShouldCallUseCaseWithCorrectEmail tests that handler passes correct email to use case
-func TestHandler_RemoveUser_ShouldCallUseCaseWithCorrectEmail(t *testing.T) {
+// TestHandler_RemoveUser_ShouldCallUseCaseWithCorrectEmailAndRole tests that handler passes correct email and role to use case
+func TestHandler_RemoveUser_ShouldCallUseCaseWithCorrectEmailAndRole(t *testing.T) {
 	// Arrange
 	expectedEmail := "specific.user@test.org"
+	expectedRole := "admin"
 	actualEmail := ""
+	actualRole := ""
 
 	mockUseCase := &MockUseCase{}
-	mockUseCase.RemoveUserFunc = func(email string) *httpresponse.HTTPError {
+	mockUseCase.RemoveUserFunc = func(email string, callerRole string) *httpresponse.HTTPError {
 		actualEmail = email
+		actualRole = callerRole
 		return nil
 	}
 
 	handler := NewHandler(mockUseCase)
-	e := echo.New()
-	req := createRemoveUserRequest(expectedEmail)
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
+	c, _ := createRemoveUserContext(expectedEmail, expectedRole)
 
 	// Act
 	_ = handler.RemoveUser(c)
@@ -316,5 +348,32 @@ func TestHandler_RemoveUser_ShouldCallUseCaseWithCorrectEmail(t *testing.T) {
 	// Assert
 	if actualEmail != expectedEmail {
 		t.Errorf("Expected use case to be called with email '%s', got '%s'", expectedEmail, actualEmail)
+	}
+	if actualRole != expectedRole {
+		t.Errorf("Expected use case to be called with role '%s', got '%s'", expectedRole, actualRole)
+	}
+}
+
+// TestHandler_RemoveUser_ShouldReturnUnauthorizedWhenRoleMissing tests when role is missing from context
+func TestHandler_RemoveUser_ShouldReturnUnauthorizedWhenRoleMissing(t *testing.T) {
+	// Arrange
+	mockUseCase := &MockUseCase{}
+	mockUseCase.RemoveUserFunc = func(email string, callerRole string) *httpresponse.HTTPError {
+		return nil
+	}
+
+	handler := NewHandler(mockUseCase)
+	e := echo.New()
+	req := createRemoveUserRequest("user@example.com")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	// Note: role is NOT set in context
+
+	// Act
+	err := handler.RemoveUser(c)
+
+	// Assert
+	if err == nil && rec.Code == http.StatusOK {
+		t.Error("Expected unauthorized error when role is missing from context")
 	}
 }

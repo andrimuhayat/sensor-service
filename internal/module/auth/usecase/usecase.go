@@ -64,7 +64,7 @@ type IUseCase interface {
 	CheckRateLimit(email string) (bool, *httpresponse.HTTPError)
 	Logout(token string) *httpresponse.HTTPError
 	ChangePassword(email string, oldPassword string, newPassword string) *httpresponse.HTTPError
-	RemoveUser(email string) *httpresponse.HTTPError
+	RemoveUser(email string, callerRole string) *httpresponse.HTTPError
 }
 
 type UseCase struct {
@@ -373,10 +373,17 @@ func (u UseCase) ChangePassword(email string, oldPassword string, newPassword st
 	return nil
 }
 
-// RemoveUser deletes user by email
-// O(n) DB query where n = 1 (indexed email) + O(n) DB delete where n = 1
-func (u UseCase) RemoveUser(email string) *httpresponse.HTTPError {
+// RemoveUser deletes user by email - restricted to admin role only
+// O(1) authorization check + O(n) DB query where n = 1 (indexed email) + O(n) DB delete where n = 1
+func (u UseCase) RemoveUser(email string, callerRole string) *httpresponse.HTTPError {
 	httpError := httpresponse.HTTPError{}
+
+	// Authorization check: only admin role can remove users - O(1) check
+	if callerRole != "admin" {
+		httpError.Code = http.StatusForbidden
+		httpError.Message = "Forbidden: only admin can remove users"
+		return &httpError
+	}
 
 	// Find user by email - O(n) DB query where n = 1 (indexed email)
 	authUser, err := u.GenericRepository.FindByEmail(entity.User{}, email)

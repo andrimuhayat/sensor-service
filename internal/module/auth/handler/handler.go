@@ -87,7 +87,7 @@ func (h Handler) ChangePassword(c echo.Context) error {
 }
 
 // @Summary Remove User
-// @Description Remove user by email (requires authentication)
+// @Description Remove user by email (admin only)
 // @Accept  json
 // @Produce  json
 // @Param data body RemoveUserRequest true "Remove User"
@@ -108,7 +108,13 @@ func (h Handler) RemoveUser(c echo.Context) error {
 		return httpresponse.ResponseWithError(c, http.StatusBadRequest, err.Error())
 	}
 
-	errs := h.UseCase.RemoveUser(removeUserReq.Email)
+	// Extract caller role from context (set by auth middleware after JWT validation)
+	callerRole, ok := c.Get("role").(string)
+	if !ok {
+		return httpresponse.ResponseWithError(c, http.StatusUnauthorized, "Unauthorized: missing role in context")
+	}
+
+	errs := h.UseCase.RemoveUser(removeUserReq.Email, callerRole)
 	if errs != nil {
 		return httpresponse.ResponseWithErrors(c, errs.Code, errs)
 	}
