@@ -63,6 +63,7 @@ type IUseCase interface {
 	ValidateSession(email string) (bool, *httpresponse.HTTPError)
 	CheckRateLimit(email string) (bool, *httpresponse.HTTPError)
 	Logout(token string) *httpresponse.HTTPError
+	ChangePassword(email string, currentPassword string, newPassword string) *httpresponse.HTTPError
 }
 
 type UseCase struct {
@@ -408,6 +409,74 @@ func (u UseCase) Logout(token string) *httpresponse.HTTPError {
 	u.sessionStore.mu.Lock()
 	delete(u.sessionStore.sessions, metadata.Email)
 	u.sessionStore.mu.Unlock()
+
+	return nil
+}
+
+// ChangePassword updates user password after verifying current password
+// O(1) session validation + O(n) DB query where n = 1 (indexed email) + O(1) password hash + O(1) update
+func (u UseCase) ChangePassword(email string, currentPassword string, newPassword string) *httpresponse.HTTPError {
+	httpError := httpresponse.HTTPError{}
+
+	// O(1) session validation via sessionStore
+	u.sessionStore.mu.RLock()
+	session, sessionExists := u.sessionStore.sessions[email]
+	u.sessionStore.mu.RUnlock()
+
+	if !sessionExists {
+		httpError.Code = http.StatusUnauthorized
+		httpError.Message = "User session not found"
+		return &httpError
+	}
+
+	if time.Now().After(session.SessionExpiry) {
+		httpError.Code = http.StatusUnauthorized
+		httpError.Message = "Session expired"
+		return &httpError
+	}
+
+	// O(n) DB query where n = 1 (indexed email)
+	authUser, err := u.GenericRepository.FindByEmail(entity.User{}, email)
+	if err != nil {
+		log.Println("{ChangePassword}{FindByEmail}{Error} : ", err)
+		httpError.Code = http.StatusInternalServerError
+		httpError.Message = httpresponse.ErrorInternalServerError.Message
+		return &httpError
+	}
+
+	if authUser == nil {
+		httpError.Code = http.StatusNotFound
+		httpError.Message = "User not found"
+		return &httpError
+	}
+
+	user, _ := helper.TypeConverter[entity.User](&authUser)
+
+	// Verify current password - O(1) hash comparison
+	if !helper.CheckPasswordHash(currentPassword, user.Password) {
+		httpError.Code = http.StatusBadRequest
+		httpError.Message = "Current password is incorrect"
+		return &httpError
+	}
+
+	// Hash new password - O(1) operation
+	hashedPassword, err := helper.GeneratehashPassword(newPassword)
+	if err != nil {
+		log.Println("{ChangePassword}{GeneratehashPassword}{Error} : ", err)
+		httpError.Code = http.StatusInternalServerError
+		httpError.Message = "Failed to hash password"
+		return &httpError
+	}
+
+	user.Password = hashedPassword
+
+	// Update user in DB - O(n) where n = 1 (indexed email)
+	if err := u.GenericRepository.Update(user); err != nil {
+		log.Println("{ChangePassword}{Update}{Error} : ", err)
+		httpError.Code = http.StatusInternalServerError
+		httpError.Message = httpresponse.ErrorInternalServerError.Message
+		return &httpError
+	}
 
 	return nil
 }
