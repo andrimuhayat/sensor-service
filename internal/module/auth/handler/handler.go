@@ -122,6 +122,43 @@ func (h Handler) RemoveUser(c echo.Context) error {
 	return httpresponse.ResponseWithJSON(c, http.StatusOK, httpresponse.ResponseSuccess(http.StatusOK, "success", nil))
 }
 
+// @Summary Change User Status
+// @Description Activate or deactivate user account (admin only)
+// @Accept  json
+// @Produce  json
+// @Param data body ChangeUserStatusRequest true "Change User Status"
+// @Success 200 {object} httpresponse.ResponseHandler
+// @Router /api/user/changestatus [post]
+// @Param Authorization header string true "Insert your access token" default(Bearer <Add access token here>)
+func (h Handler) ChangeUserStatus(c echo.Context) error {
+	request, err := config.MappingRequest(c)
+	if err != nil {
+		return httpresponse.ResponseWithError(c, http.StatusInternalServerError, err.Error())
+	}
+
+	var changeStatusReq struct {
+		Email     string `json:"email"`
+		NewStatus string `json:"new_status"`
+	}
+
+	if err := config.MapToStruct(request.Body, &changeStatusReq); err != nil {
+		return httpresponse.ResponseWithError(c, http.StatusBadRequest, err.Error())
+	}
+
+	// Extract caller role from context (set by auth middleware after JWT validation)
+	callerRole, ok := c.Get("role").(string)
+	if !ok {
+		return httpresponse.ResponseWithError(c, http.StatusUnauthorized, "Unauthorized: missing role in context")
+	}
+
+	errs := h.UseCase.ChangeUserStatus(changeStatusReq.Email, callerRole, changeStatusReq.NewStatus)
+	if errs != nil {
+		return httpresponse.ResponseWithErrors(c, errs.Code, errs)
+	}
+
+	return httpresponse.ResponseWithJSON(c, http.StatusOK, httpresponse.ResponseSuccess(http.StatusOK, "success", nil))
+}
+
 func NewHandler(useCase auth.IUseCase) Handler {
 	return Handler{
 		UseCase: useCase,
