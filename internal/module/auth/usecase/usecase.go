@@ -64,6 +64,7 @@ type IUseCase interface {
 	CheckRateLimit(email string) (bool, *httpresponse.HTTPError)
 	Logout(token string) *httpresponse.HTTPError
 	ChangePassword(email string, oldPassword string, newPassword string) *httpresponse.HTTPError
+	RemoveUser(email string) *httpresponse.HTTPError
 }
 
 type UseCase struct {
@@ -364,6 +365,39 @@ func (u UseCase) ChangePassword(email string, oldPassword string, newPassword st
 
 	if err := u.GenericRepository.Update(user); err != nil {
 		log.Println("{ChangePassword}{Update}{Error} : ", err)
+		httpError.Code = http.StatusInternalServerError
+		httpError.Message = httpresponse.ErrorInternalServerError.Message
+		return &httpError
+	}
+
+	return nil
+}
+
+// RemoveUser deletes user by email
+// O(n) DB query where n = 1 (indexed email) + O(n) DB delete where n = 1
+func (u UseCase) RemoveUser(email string) *httpresponse.HTTPError {
+	httpError := httpresponse.HTTPError{}
+
+	// Find user by email - O(n) DB query where n = 1 (indexed email)
+	authUser, err := u.GenericRepository.FindByEmail(entity.User{}, email)
+	if err != nil {
+		log.Println("{RemoveUser}{FindByEmail}{Error} : ", err)
+		httpError.Code = http.StatusInternalServerError
+		httpError.Message = httpresponse.ErrorInternalServerError.Message
+		return &httpError
+	}
+
+	if authUser == nil {
+		httpError.Code = http.StatusBadRequest
+		httpError.Message = "User not found"
+		return &httpError
+	}
+
+	user, _ := helper.TypeConverter[entity.User](&authUser)
+
+	// Delete user by ID - O(n) DB delete where n = 1 (indexed ID)
+	if err := u.GenericRepository.DeleteByID(user.ID); err != nil {
+		log.Println("{RemoveUser}{DeleteByID}{Error} : ", err)
 		httpError.Code = http.StatusInternalServerError
 		httpError.Message = httpresponse.ErrorInternalServerError.Message
 		return &httpError
