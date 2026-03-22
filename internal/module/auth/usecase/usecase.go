@@ -65,6 +65,7 @@ type IUseCase interface {
 	Logout(token string) *httpresponse.HTTPError
 	ChangePassword(email string, oldPassword string, newPassword string) *httpresponse.HTTPError
 	RemoveUser(email string, callerRole string) *httpresponse.HTTPError
+	ChangeUserStatus(email string, activate bool, callerRole string) *httpresponse.HTTPError
 }
 
 type UseCase struct {
@@ -405,6 +406,52 @@ func (u UseCase) RemoveUser(email string, callerRole string) *httpresponse.HTTPE
 	// Delete user by ID - O(n) DB delete where n = 1 (indexed ID)
 	if err := u.GenericRepository.DeleteByID(user.ID); err != nil {
 		log.Println("{RemoveUser}{DeleteByID}{Error} : ", err)
+		httpError.Code = http.StatusInternalServerError
+		httpError.Message = httpresponse.ErrorInternalServerError.Message
+		return &httpError
+	}
+
+	return nil
+}
+
+// ChangeUserStatus activates or deactivates a user - restricted to admin role only
+// O(1) authorization check + O(n) DB query where n = 1 (indexed email) + O(n) DB update where n = 1
+func (u UseCase) ChangeUserStatus(email string, activate bool, callerRole string) *httpresponse.HTTPError {
+	httpError := httpresponse.HTTPError{}
+
+	// Authorization check: only admin role can change user status - O(1) check
+	if callerRole != "admin" {
+		httpError.Code = http.StatusForbidden
+		httpError.Message = "Forbidden: only admin can change user status"
+		return &httpError
+	}
+
+	// Find user by email - O(n) DB query where n = 1 (indexed email)
+	authUser, err := u.GenericRepository.FindByEmail(entity.User{}, email)
+	if err != nil {
+		log.Println("{ChangeUserStatus}{FindByEmail}{Error} : ", err)
+		httpError.Code = http.StatusInternalServerError
+		httpError.Message = httpresponse.ErrorInternalServerError.Message
+		return &httpError
+	}
+
+	if authUser == nil {
+		httpError.Code = http.StatusBadRequest
+		httpError.Message = "User not found"
+		return &httpError
+	}
+
+	user, _ := helper.TypeConverter[entity.User](&authUser)
+
+	// Update user status - O(n) DB update where n = 1 (indexed email)
+	if activate {
+		user.Status = "activated"
+	} else {
+		user.Status = "deactivated"
+	}
+
+	if err := u.GenericRepository.Update(user); err != nil {
+		log.Println("{ChangeUserStatus}{Update}{Error} : ", err)
 		httpError.Code = http.StatusInternalServerError
 		httpError.Message = httpresponse.ErrorInternalServerError.Message
 		return &httpError
