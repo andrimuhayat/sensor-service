@@ -1,53 +1,28 @@
 package handler
 
 import (
-	"time"
-
 	"github.com/labstack/echo/v4"
+	"sensor-service/internal/platform/httpengine/httpresponse"
 )
-
-// RateLimiterConfig holds the rate limiter configuration
-type RateLimiterConfig struct {
-	MaxRequests int           // Maximum requests per window
-	WindowSize  time.Duration // Time window duration
-}
 
 // Handler represents the rate limit handler
 type Handler struct {
-	config RateLimiterConfig
 }
 
 // NewHandler creates a new rate limit handler
-// Follows the pattern from internal/module/auth/handler/route.go
-func NewHandler(config RateLimiterConfig) *Handler {
-	return &Handler{
-		config: config,
-	}
+func NewHandler() Handler {
+	return Handler{}
 }
 
-// NewRoute sets up the rate limit routes
-// Follows the pattern from internal/module/auth/handler/route.go
-func NewRoute(h *Handler, route *echo.Group) {
-	rl := route.Group("/ratelimit")
-	rl.GET("/status", h.GetStatus)
-	rl.POST("/reset", h.Reset)
-}
-
-// GetStatus handles GET /api/ratelimit/status
-// Returns the current rate limit configuration and status
-func (h *Handler) GetStatus(c echo.Context) error {
-	// Return rate limit configuration status
-	return c.JSON(200, map[string]interface{}{
-		"max_requests": h.config.MaxRequests,
-		"window_size":  h.config.WindowSize.String(),
+// HealthCheck is a simple health check endpoint
+func (h Handler) HealthCheck(c echo.Context) error {
+	return httpresponse.ResponseWithSuccess(c, map[string]string{
+		"status": "ok",
 	})
 }
 
-// Reset handles POST /api/ratelimit/reset
-// Resets the rate limit counters (admin function)
-func (h *Handler) Reset(c echo.Context) error {
-	// In a real implementation, this would reset the rate limiter
-	return c.JSON(200, map[string]interface{}{
-		"message": "Rate limit counters reset successfully",
-	})
+// NewRateLimitRoute initializes rate limit related routes
+func NewRateLimitRoute(h Handler, route *echo.Group) {
+	rateLimit := route.Group("/ratelimit")
+	rateLimit.GET("/health", h.HealthCheck)
 }

@@ -1,37 +1,65 @@
 package ratelimit
 
 import (
-	"github.com/labstack/echo/v4"
-	ratelimitHandler "sensor-service/internal/module/ratelimit/handler"
 	"sensor-service/internal/platform/app"
 	module "sensor-service/internal/platform/common"
+	"sync"
 	"time"
+
+	"github.com/labstack/echo/v4"
+	"sensor-service/internal/platform/middleware"
 )
 
-// RateLimiterConfig holds the rate limiter configuration
-type RateLimiterConfig struct {
-	MaxRequests int           // Maximum requests per window
-	WindowSize  time.Duration // Time window duration
+// Service holds the rate limiter instance
+type Service struct {
+	ratelimiter *middleware.RateLimiter
 }
 
-// defaultRateLimiterConfig returns the default configuration
-func defaultRateLimiterConfig() RateLimiterConfig {
-	return RateLimiterConfig{
-		MaxRequests: 100,        // 100 requests
-		WindowSize:  time.Minute, // per minute
+// NewService creates a new rate limit service
+func NewService(maxRequests int, windowSize time.Duration) *Service {
+	return &Service{
+		ratelimiter: middleware.NewRateLimiter(maxRequests, windowSize),
 	}
 }
 
-// StartService initializes and starts the rate limiter service
-// Follows the pattern from internal/module/auth/service.go
+// GetRateLimiter returns the rate limiter instance
+func (s *Service) GetRateLimiter() *middleware.RateLimiter {
+	return s.ratelimiter
+}
+
+// GetMiddleware returns the Echo middleware for rate limiting
+func (s *Service) GetMiddleware() echo.MiddlewareFunc {
+	return middleware.RateLimitMiddleware(s.ratelimiter)
+}
+
+// Reset resets the rate limiter
+func (s *Service) Reset() {
+	s.ratelimiter.Reset()
+}
+
+// GetConfig returns the rate limiter configuration
+func (s *Service) GetConfig() middleware.RateLimiterConfig {
+	return s.ratelimiter.GetConfig()
+}
+
+func RunConsumer(wg *sync.WaitGroup, f func()) {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		f()
+	}()
+}
+
+// StartService initializes and wires the rate limiter service
+// This is the wiring function mentioned in the QA findings
 func StartService(dependency module.Dependency, router *echo.Echo, app app.App) {
-	// Use default configuration
-	config := defaultRateLimiterConfig()
+	// Initialize rate limiter service with default configuration
+	// 100 requests per minute
+	rateLimitService := NewService(100, time.Minute)
 
-	// Initialize handler with configuration
-	handler := ratelimitHandler.NewHandler(config)
+	// Store in dependency for other modules to use
+	dependency.RateLimitService = rateLimitService
 
-	// Define routes
-	versionRoute := router.Group("/api")
-	ratelimitHandler.NewRoute(handler, versionRoute)
+	// Apply rate limiter middleware globally to all routes
+	router.Use(rateLimitService.GetMiddleware())
 }
