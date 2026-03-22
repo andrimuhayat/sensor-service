@@ -780,6 +780,149 @@ func TestUseCase_Logout_ShouldReturnErrorWhenTokenInvalid(t *testing.T) {
 }
 
 // ============================================================================
+// ChangePassword Tests
+// ============================================================================
+
+// TestUseCase_ChangePassword_ShouldUpdatePasswordWhenOldPasswordValid tests successful password change
+func TestUseCase_ChangePassword_ShouldUpdatePasswordWhenOldPasswordValid(t *testing.T) {
+	// Arrange
+	mockRepo := &MockGenericRepository{}
+	// Use a properly hashed password that will match when checked
+	hashedOldPassword := "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.R8uLOickgx2ZMRZoMy" // mock hash
+	testUser := createTestUser("user@example.com", hashedOldPassword, "user")
+	userPtr := any(testUser)
+
+	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
+		if email == "user@example.com" {
+			return &userPtr, nil
+		}
+		return nil, nil
+	}
+	mockRepo.UpdateFunc = func(T any) error {
+		return nil
+	}
+
+	useCase := NewUseCase(mockRepo, createTestAppConfig()).(UseCase)
+
+	// Act
+	err := useCase.ChangePassword("user@example.com", "oldPassword123", "newPassword456")
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+}
+
+// TestUseCase_ChangePassword_ShouldReturnErrorWhenUserNotFound tests password change with non-existent user
+func TestUseCase_ChangePassword_ShouldReturnErrorWhenUserNotFound(t *testing.T) {
+	// Arrange
+	mockRepo := &MockGenericRepository{}
+	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
+		return nil, nil
+	}
+
+	useCase := NewUseCase(mockRepo, createTestAppConfig()).(UseCase)
+
+	// Act
+	err := useCase.ChangePassword("nonexistent@example.com", "oldPassword", "newPassword")
+
+	// Assert
+	if err == nil {
+		t.Error("Expected error for non-existent user")
+	}
+	if err.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, err.Code)
+	}
+	if err.Message != "User not found" {
+		t.Errorf("Expected error message 'User not found', got '%s'", err.Message)
+	}
+}
+
+// TestUseCase_ChangePassword_ShouldReturnErrorWhenOldPasswordIncorrect tests password change with wrong old password
+func TestUseCase_ChangePassword_ShouldReturnErrorWhenOldPasswordIncorrect(t *testing.T) {
+	// Arrange
+	mockRepo := &MockGenericRepository{}
+	testUser := createTestUser("user@example.com", "$2a$10$hashedCorrectPassword", "user")
+	userPtr := any(testUser)
+
+	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
+		if email == "user@example.com" {
+			return &userPtr, nil
+		}
+		return nil, nil
+	}
+
+	useCase := NewUseCase(mockRepo, createTestAppConfig()).(UseCase)
+
+	// Act
+	err := useCase.ChangePassword("user@example.com", "wrongOldPassword", "newPassword")
+
+	// Assert
+	if err == nil {
+		t.Error("Expected error for incorrect old password")
+	}
+	if err.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, err.Code)
+	}
+	if err.Message != "Old password is incorrect" {
+		t.Errorf("Expected error message 'Old password is incorrect', got '%s'", err.Message)
+	}
+}
+
+// TestUseCase_ChangePassword_ShouldReturnErrorWhenFindByEmailFails tests password change when DB find fails
+func TestUseCase_ChangePassword_ShouldReturnErrorWhenFindByEmailFails(t *testing.T) {
+	// Arrange
+	mockRepo := &MockGenericRepository{}
+	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
+		return nil, errors.New("database connection error")
+	}
+
+	useCase := NewUseCase(mockRepo, createTestAppConfig()).(UseCase)
+
+	// Act
+	err := useCase.ChangePassword("user@example.com", "oldPassword", "newPassword")
+
+	// Assert
+	if err == nil {
+		t.Error("Expected error when FindByEmail fails")
+	}
+	if err.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, err.Code)
+	}
+}
+
+// TestUseCase_ChangePassword_ShouldReturnErrorWhenUpdateFails tests password change when DB update fails
+func TestUseCase_ChangePassword_ShouldReturnErrorWhenUpdateFails(t *testing.T) {
+	// Arrange
+	mockRepo := &MockGenericRepository{}
+	testUser := createTestUser("user@example.com", "$2a$10$hashedCorrectPassword", "user")
+	userPtr := any(testUser)
+
+	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
+		if email == "user@example.com" {
+			return &userPtr, nil
+		}
+		return nil, nil
+	}
+	mockRepo.UpdateFunc = func(T any) error {
+		return errors.New("database update error")
+	}
+
+	useCase := NewUseCase(mockRepo, createTestAppConfig()).(UseCase)
+
+	// Act
+	err := useCase.ChangePassword("user@example.com", "oldPassword", "newPassword")
+
+	// Assert
+	if err == nil {
+		t.Error("Expected error when Update fails")
+	}
+	if err.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, err.Code)
+	}
+}
+
+// ============================================================================
 // Helper Function Tests
 // ============================================================================
 
