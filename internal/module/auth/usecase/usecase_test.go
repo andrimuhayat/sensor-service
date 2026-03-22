@@ -88,8 +88,9 @@ func createTestAppConfig() app.App {
 }
 
 // Helper function to create test user
-func createTestUser(email, password, role string) entity.User {
+func createTestUser(id int, email, password, role string) entity.User {
 	return entity.User{
+		ID:       id,
 		Email:    email,
 		Password: password,
 		Role:     role,
@@ -114,7 +115,7 @@ func createTestAuthRequest(email, password string) config.HTTPRequest {
 func TestUseCase_SignIn_ShouldReturnTokenWhenCredentialsValid(t *testing.T) {
 	// Arrange
 	mockRepo := &MockGenericRepository{}
-	testUser := createTestUser("user@example.com", "hashedPassword123", "user")
+	testUser := createTestUser(1, "user@example.com", "hashedPassword123", "user")
 	userPtr := any(testUser)
 
 	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
@@ -175,7 +176,7 @@ func TestUseCase_SignIn_ShouldReturnErrorWhenUserNotFound(t *testing.T) {
 func TestUseCase_SignIn_ShouldReturnErrorWhenPasswordIncorrect(t *testing.T) {
 	// Arrange
 	mockRepo := &MockGenericRepository{}
-	testUser := createTestUser("user@example.com", "$2a$10$wronghash", "user")
+	testUser := createTestUser(1, "user@example.com", "$2a$10$wronghash", "user")
 	userPtr := any(testUser)
 
 	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
@@ -272,7 +273,7 @@ func TestUseCase_SignUp_ShouldCreateUserWhenValidInput(t *testing.T) {
 func TestUseCase_SignUp_ShouldReturnErrorWhenEmailExists(t *testing.T) {
 	// Arrange
 	mockRepo := &MockGenericRepository{}
-	existingUser := createTestUser("existing@example.com", "hashedPassword", "user")
+	existingUser := createTestUser(1, "existing@example.com", "hashedPassword", "user")
 	userPtr := any(existingUser)
 
 	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
@@ -422,7 +423,7 @@ func TestUseCase_RefreshToken_ShouldReturnErrorWhenTokenExpired(t *testing.T) {
 func TestUseCase_InitiatePasswordReset_ShouldReturnResetTokenWhenEmailValid(t *testing.T) {
 	// Arrange
 	mockRepo := &MockGenericRepository{}
-	testUser := createTestUser("user@example.com", "hashedPassword", "user")
+	testUser := createTestUser(1, "user@example.com", "hashedPassword", "user")
 	userPtr := any(testUser)
 
 	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
@@ -479,7 +480,7 @@ func TestUseCase_InitiatePasswordReset_ShouldReturnErrorWhenEmailNotFound(t *tes
 func TestUseCase_ResetPassword_ShouldUpdatePasswordWhenTokenValid(t *testing.T) {
 	// Arrange
 	mockRepo := &MockGenericRepository{}
-	testUser := createTestUser("user@example.com", "oldHashedPassword", "user")
+	testUser := createTestUser(1, "user@example.com", "oldHashedPassword", "user")
 	userPtr := any(testUser)
 
 	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
@@ -569,7 +570,7 @@ func TestUseCase_ChangePassword_ShouldUpdatePasswordWhenOldPasswordCorrect(t *te
 	mockRepo := &MockGenericRepository{}
 	// Use bcrypt hash of "oldpassword123" for the stored password
 	// $2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.rsS/lW1pCP8q6fVZHG (example hash)
-	testUser := createTestUser("user@example.com", "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.rsS/lW1pCP8q6fVZHG", "user")
+	testUser := createTestUser(1, "user@example.com", "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3.rsS/lW1pCP8q6fVZHG", "user")
 	userPtr := any(testUser)
 
 	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
@@ -622,7 +623,7 @@ func TestUseCase_ChangePassword_ShouldReturnErrorWhenUserNotFound(t *testing.T) 
 func TestUseCase_ChangePassword_ShouldReturnErrorWhenOldPasswordIncorrect(t *testing.T) {
 	// Arrange
 	mockRepo := &MockGenericRepository{}
-	testUser := createTestUser("user@example.com", "$2a$10$hashedpassword", "user")
+	testUser := createTestUser(1, "user@example.com", "$2a$10$hashedpassword", "user")
 	userPtr := any(testUser)
 
 	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
@@ -653,7 +654,7 @@ func TestUseCase_ChangePassword_ShouldReturnErrorWhenOldPasswordIncorrect(t *tes
 func TestUseCase_ChangePassword_ShouldReturnErrorWhenDatabaseUpdateFails(t *testing.T) {
 	// Arrange
 	mockRepo := &MockGenericRepository{}
-	testUser := createTestUser("user@example.com", "$2a$10$hashedpassword", "user")
+	testUser := createTestUser(1, "user@example.com", "$2a$10$hashedpassword", "user")
 	userPtr := any(testUser)
 
 	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
@@ -897,6 +898,115 @@ func TestUseCase_Logout_ShouldReturnErrorWhenTokenInvalid(t *testing.T) {
 	}
 	if err.Code != http.StatusBadRequest {
 		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, err.Code)
+	}
+}
+
+// ============================================================================
+// RemoveUser Tests
+// ============================================================================
+
+// TestUseCase_RemoveUser_ShouldDeleteUserWhenCalledByAdmin tests successful user removal by admin
+func TestUseCase_RemoveUser_ShouldDeleteUserWhenCalledByAdmin(t *testing.T) {
+	// Arrange
+	mockRepo := &MockGenericRepository{}
+	testUser := createTestUser(1, "user@example.com", "hashedPassword", "user")
+	userPtr := any(testUser)
+
+	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
+		if email == "user@example.com" {
+			return &userPtr, nil
+		}
+		return nil, nil
+	}
+	mockRepo.DeleteByIDFunc = func(T any, id int) error {
+		return nil
+	}
+
+	useCase := NewUseCase(mockRepo, createTestAppConfig()).(UseCase)
+
+	// Act
+	err := useCase.RemoveUser("user@example.com", "admin")
+
+	// Assert
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+}
+
+// TestUseCase_RemoveUser_ShouldReturnForbiddenWhenCalledByNonAdmin tests authorization check for non-admin
+func TestUseCase_RemoveUser_ShouldReturnForbiddenWhenCalledByNonAdmin(t *testing.T) {
+	// Arrange
+	mockRepo := &MockGenericRepository{}
+	useCase := NewUseCase(mockRepo, createTestAppConfig()).(UseCase)
+
+	// Act
+	err := useCase.RemoveUser("user@example.com", "user")
+
+	// Assert
+	if err == nil {
+		t.Error("Expected error for non-admin caller")
+	}
+	if err.Code != http.StatusForbidden {
+		t.Errorf("Expected status %d, got %d", http.StatusForbidden, err.Code)
+	}
+	if err.Message != "Forbidden: only admin can remove users" {
+		t.Errorf("Expected message 'Forbidden: only admin can remove users', got '%s'", err.Message)
+	}
+}
+
+// TestUseCase_RemoveUser_ShouldReturnErrorWhenUserNotFound tests error when user doesn't exist
+func TestUseCase_RemoveUser_ShouldReturnErrorWhenUserNotFound(t *testing.T) {
+	// Arrange
+	mockRepo := &MockGenericRepository{}
+	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
+		return nil, nil
+	}
+
+	useCase := NewUseCase(mockRepo, createTestAppConfig()).(UseCase)
+
+	// Act
+	err := useCase.RemoveUser("nonexistent@example.com", "admin")
+
+	// Assert
+	if err == nil {
+		t.Error("Expected error for non-existent user")
+	}
+	if err.Code != http.StatusBadRequest {
+		t.Errorf("Expected status %d, got %d", http.StatusBadRequest, err.Code)
+	}
+	if err.Message != "User not found" {
+		t.Errorf("Expected message 'User not found', got '%s'", err.Message)
+	}
+}
+
+// TestUseCase_RemoveUser_ShouldReturnErrorWhenDatabaseDeleteFails tests error when DB delete fails
+func TestUseCase_RemoveUser_ShouldReturnErrorWhenDatabaseDeleteFails(t *testing.T) {
+	// Arrange
+	mockRepo := &MockGenericRepository{}
+	testUser := createTestUser(1, "user@example.com", "hashedPassword", "user")
+	userPtr := any(testUser)
+
+	mockRepo.FindByEmailFunc = func(T any, email string) (d *any, err error) {
+		if email == "user@example.com" {
+			return &userPtr, nil
+		}
+		return nil, nil
+	}
+	mockRepo.DeleteByIDFunc = func(T any, id int) error {
+		return errors.New("database connection error")
+	}
+
+	useCase := NewUseCase(mockRepo, createTestAppConfig()).(UseCase)
+
+	// Act
+	err := useCase.RemoveUser("user@example.com", "admin")
+
+	// Assert
+	if err == nil {
+		t.Error("Expected error when database delete fails")
+	}
+	if err.Code != http.StatusInternalServerError {
+		t.Errorf("Expected status %d, got %d", http.StatusInternalServerError, err.Code)
 	}
 }
 
