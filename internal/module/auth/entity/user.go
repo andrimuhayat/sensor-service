@@ -1,9 +1,9 @@
 package entity
 
 type User struct {
-	ID        int    `json:"id" db:"id"`
-	Email     string `json:"email" db:"email"`
-	Password  string `json:"password" db:"password"`
-	Role      string `json:"roles" db:"roles"`
-	Status    string `json:"status" db:"status"`
+	ID       int    `json:"id" db:"id"`
+	Email    string `json:"email" db:"email"`
+	Password string `json:"password" db:"password"`
+	Role     string `json:"roles" db:"roles"`
+	Status   bool   `json:"status" db:"status"`
 }
