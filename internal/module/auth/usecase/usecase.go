@@ -63,6 +63,7 @@ type IUseCase interface {
 	ValidateSession(email string) (bool, *httpresponse.HTTPError)
 	CheckRateLimit(email string) (bool, *httpresponse.HTTPError)
 	Logout(token string) *httpresponse.HTTPError
+	ChangePassword(email string, oldPassword string, newPassword string) *httpresponse.HTTPError
 }
 
 type UseCase struct {
@@ -316,6 +317,57 @@ func (u UseCase) ResetPassword(resetToken string, newPassword string) *httprespo
 	u.resetTokenMu.Lock()
 	delete(u.resetTokens, resetToken)
 	u.resetTokenMu.Unlock()
+
+	return nil
+}
+
+// ChangePassword verifies old password and updates to new password
+// O(n) DB query where n = 1 (indexed email) + O(n) DB update where n = 1
+func (u UseCase) ChangePassword(email string, oldPassword string, newPassword string) *httpresponse.HTTPError {
+	httpError := httpresponse.HTTPError{}
+
+	// Find user by email - O(n) DB query where n = 1 (indexed email)
+	authUser, err := u.GenericRepository.FindByEmail(entity.User{}, email)
+	if err != nil {
+		log.Println("{ChangePassword}{FindByEmail}{Error} : ", err)
+		httpError.Code = http.StatusInternalServerError
+		httpError.Message = httpresponse.ErrorInternalServerError.Message
+		return &httpError
+	}
+
+	if authUser == nil {
+		httpError.Code = http.StatusBadRequest
+		httpError.Message = "User not found"
+		return &httpError
+	}
+
+	user, _ := helper.TypeConverter[entity.User](&authUser)
+
+	// Verify old password matches - O(1) hash comparison
+	if !helper.CheckPasswordHash(oldPassword, user.Password) {
+		httpError.Code = http.StatusBadRequest
+		httpError.Message = "Old password is incorrect"
+		return &httpError
+	}
+
+	// Hash new password - O(1) operation
+	hashedPassword, err := helper.GeneratehashPassword(newPassword)
+	if err != nil {
+		log.Println("{ChangePassword}{GeneratehashPassword}{Error} : ", err)
+		httpError.Code = http.StatusInternalServerError
+		httpError.Message = "Failed to hash password"
+		return &httpError
+	}
+
+	// Update user password in DB - O(n) DB update where n = 1 (indexed email)
+	user.Password = hashedPassword
+
+	if err := u.GenericRepository.Update(user); err != nil {
+		log.Println("{ChangePassword}{Update}{Error} : ", err)
+		httpError.Code = http.StatusInternalServerError
+		httpError.Message = httpresponse.ErrorInternalServerError.Message
+		return &httpError
+	}
 
 	return nil
 }

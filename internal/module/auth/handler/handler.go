@@ -54,6 +54,38 @@ func (h Handler) SignUp(c echo.Context) error {
 	return httpresponse.ResponseWithJSON(c, http.StatusOK, httpresponse.ResponseSuccess(http.StatusOK, "success", data))
 }
 
+// @Summary Change Password
+// @Description Change user password (requires authentication)
+// @Accept  json
+// @Produce  json
+// @Param data body dto.ChangePasswordRequest true "Change Password"
+// @Success 200 {object} httpresponse.ResponseHandler
+// @Router /api/user/changepassword [put]
+// @Param Authorization header string true "Insert your access token" default(Bearer <Add access token here>)
+func (h Handler) ChangePassword(c echo.Context) error {
+	request, err := config.MappingRequest(c)
+	if err != nil {
+		return httpresponse.ResponseWithError(c, http.StatusInternalServerError, err.Error())
+	}
+
+	var changePwdReq struct {
+		Email       string `json:"email"`
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+
+	if err := config.MapToStruct(request.Body, &changePwdReq); err != nil {
+		return httpresponse.ResponseWithError(c, http.StatusBadRequest, err.Error())
+	}
+
+	errs := h.UseCase.ChangePassword(changePwdReq.Email, changePwdReq.OldPassword, changePwdReq.NewPassword)
+	if errs != nil {
+		return httpresponse.ResponseWithErrors(c, errs.Code, errs)
+	}
+
+	return httpresponse.ResponseWithJSON(c, http.StatusOK, httpresponse.ResponseSuccess(http.StatusOK, "success", nil))
+}
+
 func NewHandler(useCase auth.IUseCase) Handler {
 	return Handler{
 		UseCase: useCase,
