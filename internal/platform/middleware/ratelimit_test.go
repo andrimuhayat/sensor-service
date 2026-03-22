@@ -96,7 +96,7 @@ func TestRateLimit_ShouldAllowRequestWithinLimit(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetHeader("X-Real-IP", "test-client-1")
+	c.Request().Header.Set("X-Real-IP", "test-client-1")
 
 	nextCalled := false
 	next := func(c echo.Context) error {
@@ -126,7 +126,7 @@ func TestRateLimit_ShouldBlockRequestWhenLimitExceeded(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetHeader("X-Real-IP", "test-client-2")
+	c.Request().Header.Set("X-Real-IP", "test-client-2")
 
 	next := func(c echo.Context) error {
 		return nil
@@ -154,7 +154,7 @@ func TestRateLimit_ShouldReturn429StatusCode(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetHeader("X-Real-IP", "test-client-3")
+	c.Request().Header.Set("X-Real-IP", "test-client-3")
 
 	next := func(c echo.Context) error {
 		return nil
@@ -204,7 +204,7 @@ func TestReset_ShouldAllowNewRequestsAfterReset(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetHeader("X-Real-IP", "test-client-reset")
+	c.Request().Header.Set("X-Real-IP", "test-client-reset")
 
 	next := func(c echo.Context) error {
 		return nil
@@ -252,7 +252,7 @@ func TestGetClientCount_ShouldReturnCorrectCount(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetHeader("X-Real-IP", "test-client-count")
+	c.Request().Header.Set("X-Real-IP", "test-client-count")
 
 	next := func(c echo.Context) error {
 		return nil
@@ -282,7 +282,7 @@ func TestGetClientCount_ShouldReturnZeroAfterWindowExpiry(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetHeader("X-Real-IP", "test-client-expiry")
+	c.Request().Header.Set("X-Real-IP", "test-client-expiry")
 
 	next := func(c echo.Context) error {
 		return nil
@@ -331,7 +331,7 @@ func TestIsClientLimited_ShouldReturnFalseWhenUnderLimit(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetHeader("X-Real-IP", "test-client-limited")
+	c.Request().Header.Set("X-Real-IP", "test-client-limited")
 
 	next := func(c echo.Context) error {
 		return nil
@@ -361,7 +361,7 @@ func TestIsClientLimited_ShouldReturnTrueWhenAtLimit(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetHeader("X-Real-IP", "test-client-at-limit")
+	c.Request().Header.Set("X-Real-IP", "test-client-at-limit")
 
 	next := func(c echo.Context) error {
 		return nil
@@ -391,7 +391,7 @@ func TestIsClientLimited_ShouldReturnFalseAfterWindowExpiry(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
-	c.SetHeader("X-Real-IP", "test-client-expiry-limited")
+	c.Request().Header.Set("X-Real-IP", "test-client-expiry-limited")
 
 	next := func(c echo.Context) error {
 		return nil

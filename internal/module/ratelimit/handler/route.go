@@ -1,18 +1,25 @@
 package handler
 
 import (
+	"time"
+
 	"github.com/labstack/echo/v4"
-	"sensor-service/internal/module/ratelimit"
 )
+
+// RateLimiterConfig holds the rate limiter configuration
+type RateLimiterConfig struct {
+	MaxRequests int           // Maximum requests per window
+	WindowSize  time.Duration // Time window duration
+}
 
 // Handler represents the rate limit handler
 type Handler struct {
-	config ratelimit.RateLimiterConfig
+	config RateLimiterConfig
 }
 
 // NewHandler creates a new rate limit handler
 // Follows the pattern from internal/module/auth/handler/route.go
-func NewHandler(config ratelimit.RateLimiterConfig) *Handler {
+func NewHandler(config RateLimiterConfig) *Handler {
 	return &Handler{
 		config: config,
 	}

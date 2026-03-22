@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"errors"
 	"net/http"
 	"sync"
 	"time"
@@ -13,48 +12,41 @@ import (
 // RateLimiterConfig holds configuration for rate limiting
 type RateLimiterConfig struct {
 	MaxRequests int           // Maximum requests allowed within the time window
-	TimeWindow  time.Duration // Time window for rate limiting
+	WindowSize  time.Duration // Time window for rate limiting
 }
 
-// RateLimiterData stores rate limit data for each client
-type RateLimiterData struct {
-	Count       int
-	ResetAt    time.Time
-}
-
-// RateLimiterStore is thread-safe storage for rate limit data
-type RateLimiterStore struct {
-	mu   sync.RWMutex
-	data map[string]*RateLimiterData
+// rateLimitEntry stores rate limit data for each client
+type rateLimitEntry struct {
+	Count     int
+	StartTime time.Time
 }
 
 // RateLimiter implements rate limiting middleware
 type RateLimiter struct {
-	store  *RateLimiterStore
-	config RateLimiterConfig
+	mu      sync.RWMutex
+	clients map[string]*rateLimitEntry
+	config  RateLimiterConfig
 }
 
 // NewRateLimiter creates a new RateLimiter instance
 // O(n) space complexity where n is number of unique clients
-func NewRateLimiter(maxRequests int, timeWindow time.Duration) *RateLimiter {
+func NewRateLimiter(maxRequests int, windowSize time.Duration) *RateLimiter {
 	return &RateLimiter{
-		store: &RateLimiterStore{
-			data: make(map[string]*RateLimiterData),
-		},
+		clients: make(map[string]*rateLimitEntry),
 		config: RateLimiterConfig{
 			MaxRequests: maxRequests,
-			TimeWindow:  timeWindow,
+			WindowSize:  windowSize,
 		},
 	}
 }
 
-// RateLimitMiddleware returns Echo middleware for rate limiting
+// RateLimit returns Echo middleware for rate limiting
 // O(1) time complexity for checking and updating rate limit
-func (rl *RateLimiter) RateLimitMiddleware() echo.MiddlewareFunc {
+func (rl *RateLimiter) RateLimit() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Get client identifier (IP address)
-			clientID := getClientIP(c)
+			clientID := getClientID(c)
 			if clientID == "" {
 				return httpresponse.ResponseWithErrors(c, http.StatusBadRequest, &httpresponse.HTTPError{
 					Code:    http.StatusBadRequest,
@@ -63,11 +55,7 @@ func (rl *RateLimiter) RateLimitMiddleware() echo.MiddlewareFunc {
 			}
 
 			// Check if request is allowed
-			allowed, err := rl.checkRateLimit(clientID)
-			if err != nil {
-				return err
-			}
-
+			allowed := rl.checkRateLimit(clientID)
 			if !allowed {
 				return httpresponse.ResponseWithErrors(c, http.StatusTooManyRequests, &httpresponse.HTTPError{
 					Code:    http.StatusTooManyRequests,
@@ -76,9 +64,13 @@ func (rl *RateLimiter) RateLimitMiddleware() echo.MiddlewareFunc {
 			}
 
 			// Add rate limit headers
-			c.Response().Header().Set("X-RateLimit-Limit", string(rune(rl.config.MaxRequests))
-			c.Response().Header().Set("X-RateLimit-Remaining", string(rune(rl.getRemainingRequests(clientID)))
-			c.Response().Header().Set("X-RateLimit-Reset", string(rune(rl.getResetTime(clientID)))
+			remaining := rl.config.MaxRequests - rl.GetClientCount(clientID)
+			if remaining < 0 {
+				remaining = 0
+			}
+			c.Response().Header().Set("X-RateLimit-Limit", string(rune(rl.config.MaxRequests)))
+			c.Response().Header().Set("X-RateLimit-Remaining", string(rune(remaining)))
+			c.Response().Header().Set("X-RateLimit-Reset", string(rune(rl.getResetTime(clientID))))
 
 			return next(c)
 		}
@@ -87,80 +79,106 @@ func (rl *RateLimiter) RateLimitMiddleware() echo.MiddlewareFunc {
 
 // checkRateLimit verifies if the request is allowed for the given client
 // O(1) time complexity
-func (rl *RateLimiter) checkRateLimit(clientID string) (bool, error) {
-	rl.store.mu.Lock()
-	defer rl.store.mu.Unlock()
+func (rl *RateLimiter) checkRateLimit(clientID string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
 
 	now := time.Now()
-	data, exists := rl.store.data[clientID]
+	entry, exists := rl.clients[clientID]
 
 	if !exists {
 		// First request from this client
-		rl.store.data[clientID] = &RateLimiterData{
-			Count:    1,
-			ResetAt:  now.Add(rl.config.TimeWindow),
+		rl.clients[clientID] = &rateLimitEntry{
+			Count:     1,
+			StartTime: now,
 		}
-		return true, nil
+		return true
 	}
 
 	// Check if time window has expired
-	if now.After(data.ResetAt) {
+	if now.Sub(entry.StartTime) > rl.config.WindowSize {
 		// Reset the counter
-		data.Count = 1
-		data.ResetAt = now.Add(rl.config.TimeWindow)
-		return true, nil
+		entry.Count = 1
+		entry.StartTime = now
+		return true
 	}
 
 	// Check if under limit
-	if data.Count < rl.config.MaxRequests {
-		data.Count++
-		return true, nil
+	if entry.Count < rl.config.MaxRequests {
+		entry.Count++
+		return true
 	}
 
 	// Rate limit exceeded
-	return false, nil
+	return false
 }
 
-// getRemainingRequests returns the number of remaining requests allowed
+// GetClientCount returns the number of requests made by the client
 // O(1) time complexity
-func (rl *RateLimiter) getRemainingRequests(clientID string) int {
-	rl.store.mu.RLock()
-	defer rl.store.mu.RUnlock()
+func (rl *RateLimiter) GetClientCount(clientID string) int {
+	rl.mu.RLock()
+	defer rl.mu.RUnlock()
 
-	data, exists := rl.store.data[clientID]
+	entry, exists := rl.clients[clientID]
 	if !exists {
-		return rl.config.MaxRequests
-	}
-
-	remaining := rl.config.MaxRequests - data.Count
-	if remaining < 0 {
 		return 0
 	}
-	return remaining
+
+	// Check if time window has expired
+	if time.Now().Sub(entry.StartTime) > rl.config.WindowSize {
+		return 0
+	}
+
+	return entry.Count
+}
+
+// IsClientLimited checks if the client has exceeded their rate limit
+// O(1) time complexity
+func (rl *RateLimiter) IsClientLimited(clientID string) bool {
+	rl.mu.RLock()
+	defer rl.mu.RUnlock()
+
+	entry, exists := rl.clients[clientID]
+	if !exists {
+		return false
+	}
+
+	// Check if time window has expired
+	if time.Now().Sub(entry.StartTime) > rl.config.WindowSize {
+		return false
+	}
+
+	return entry.Count >= rl.config.MaxRequests
 }
 
 // getResetTime returns the Unix timestamp when the rate limit resets
 // O(1) time complexity
 func (rl *RateLimiter) getResetTime(clientID string) int {
-	rl.store.mu.RLock()
-	defer rl.store.mu.RUnlock()
+	rl.mu.RLock()
+	defer rl.mu.RUnlock()
 
-	data, exists := rl.store.data[clientID]
+	entry, exists := rl.clients[clientID]
 	if !exists {
-		return int(time.Now().Add(rl.config.TimeWindow).Unix())
+		return int(time.Now().Add(rl.config.WindowSize).Unix())
 	}
 
-	return int(data.ResetAt.Unix())
+	resetTime := entry.StartTime.Add(rl.config.WindowSize)
+	return int(resetTime.Unix())
 }
 
-// getClientIP extracts the client IP address from the request
+// getClientID extracts the client IP address from the request
 // O(1) time complexity
-func getClientIP(c echo.Context) string {
+func getClientID(c echo.Context) string {
 	// Check X-Forwarded-For header first (for proxied requests)
 	ip := c.Request().Header.Get("X-Forwarded-For")
 	if ip != "" {
 		// Take the first IP if multiple are present
-		return splitAndTrim(ip)[0]
+		for _, part := range split(ip, ",") {
+			trimmed := trim(part)
+			if trimmed != "" {
+				return trimmed
+			}
+		}
 	}
 
 	// Check X-Real-IP header
@@ -175,17 +193,13 @@ func getClientIP(c echo.Context) string {
 		return ""
 	}
 
-	return splitAndTrim(remoteAddr)[0]
-}
-
-// splitAndTrim splits a string by comma and trims whitespace
-// O(n) time complexity where n is the length of the input string
-func splitAndTrim(s string) []string {
-	var result []string
-	for _, part := range split(s, ",") {
-		result = append(result, trim(part))
+	// Extract IP from remote address (format: "IP:port")
+	for i := len(remoteAddr) - 1; i >= 0; i-- {
+		if remoteAddr[i] == ':' {
+			return remoteAddr[:i]
+		}
 	}
-	return result
+	return remoteAddr
 }
 
 // split is a simple string split function
@@ -216,28 +230,10 @@ func trim(s string) string {
 	return s[start:end]
 }
 
-// Reset clears all rate limit data
+// Reset clears all client data
 // O(n) time complexity where n is number of tracked clients
 func (rl *RateLimiter) Reset() {
-	rl.store.mu.Lock()
-	defer rl.store.mu.Unlock()
-	rl.store.data = make(map[string]*RateLimiterData)
-}
-
-// GetClientData returns the rate limit data for a specific client
-// O(1) time complexity
-func (rl *RateLimiter) GetClientData(clientID string) (*RateLimiterData, error) {
-	if clientID == "" {
-		return nil, errors.New("clientID cannot be empty")
-	}
-
-	rl.store.mu.RLock()
-	defer rl.store.mu.RUnlock()
-
-	data, exists := rl.store.data[clientID]
-	if !exists {
-		return nil, errors.New("client not found")
-	}
-
-	return data, nil
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.clients = make(map[string]*rateLimitEntry)
 }
